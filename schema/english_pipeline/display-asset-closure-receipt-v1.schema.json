@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://local.kaoyan-english/schema/english_pipeline/display-asset-closure-receipt-v1.schema.json",
+  "title": "English Obsidian display asset closure receipt v1",
+  "type": "object",
+  "required": ["schema_version", "receipt_id", "status", "plan_id", "plan_path", "plan_sha256", "package_id", "package_sha256", "manifest_sha256", "assets", "stable_asset_count", "no_display", "host_markdown", "formal_reference_scan", "obsidian_reread", "formal_write_count", "verified_at"],
+  "properties": {
+    "schema_version": {"const": "english_display_asset_closure_receipt_v1"},
+    "receipt_id": {"type": "string", "pattern": "^EN-DISPLAY-CLOSURE-[A-F0-9]{16}$"},
+    "status": {"const": "PASS"},
+    "plan_id": {"type": "string"},
+    "plan_path": {"type": "string"},
+    "plan_sha256": {"$ref": "#/$defs/sha256"},
+    "package_id": {"type": "string"},
+    "package_sha256": {"$ref": "#/$defs/sha256"},
+    "manifest_sha256": {"$ref": "#/$defs/sha256"},
+    "source_id": {"type": "string"},
+    "article_id": {"type": "string"},
+    "question_id": {"type": "string"},
+    "assets": {"type": "array"},
+    "stable_asset_count": {"type": "integer", "minimum": 0},
+    "no_display": {"type": "boolean"},
+    "host_markdown": {"type": "array"},
+    "formal_reference_scan": {"type": "object"},
+    "obsidian_reread": {"const": "PASS"},
+    "formal_write_count": {"const": 0},
+    "verified_at": {"type": "string", "format": "date-time"}
+  },
+  "$defs": {"sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"}}
+}

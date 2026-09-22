@@ -1,0 +1,138 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://local.kaoyan-english/schema/english_pipeline/sentence-support-proposal-v1.schema.json",
+  "title": "Package-bound Sol sentence-support proposal v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "proposal_id", "batch_id", "batch_manifest_sha256", "action_set_id", "expected_index_sha256", "created_at", "producer", "records", "formal_write_count", "background_processing"],
+  "properties": {
+    "schema_version": {"const": "english_sentence_support_proposal_v1"},
+    "proposal_id": {"type": "string", "minLength": 1},
+    "batch_id": {"type": "string"},
+    "batch_manifest_sha256": {"$ref": "#/$defs/sha256"},
+    "action_set_id": {"type": "string"},
+    "expected_index_sha256": {"oneOf": [{"$ref": "#/$defs/sha256"}, {"type": "null"}]},
+    "created_at": {"type": "string", "format": "date-time"},
+    "producer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["role", "model", "prompt_version"],
+      "properties": {
+        "role": {"const": "sol_nightly_reviewer"},
+        "model": {"type": "string"},
+        "prompt_version": {"type": "string"}
+      }
+    },
+    "records": {"type": "array", "items": {"$ref": "#/$defs/record"}},
+    "formal_write_count": {"const": 0},
+    "background_processing": {"const": "none"}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "evidenceRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["package_id", "package_sha256", "pointer", "kind"],
+      "properties": {
+        "package_id": {"type": "string"},
+        "package_sha256": {"$ref": "#/$defs/sha256"},
+        "pointer": {"type": "string"},
+        "kind": {"type": "string"}
+      }
+    },
+    "sourceIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source_id", "source_hash", "segment_type", "segment_id", "sentence_id", "paragraph_id", "question_id", "knowledge_point_id", "source_kind", "answer_exposure", "source_sentence", "sentence_sha256"],
+      "properties": {
+        "source_id": {"type": "string"},
+        "source_hash": {"$ref": "#/$defs/sha256"},
+        "segment_type": {"enum": ["sentence", "paragraph", "question", "knowledge_point"]},
+        "segment_id": {"type": "string"},
+        "sentence_id": {"type": ["string", "null"]},
+        "paragraph_id": {"type": ["string", "null"]},
+        "question_id": {"type": ["string", "null"]},
+        "knowledge_point_id": {"type": ["string", "null"]},
+        "source_kind": {"enum": ["article", "user_provided", "question", "option", "explanation", "unknown"]},
+        "answer_exposure": {"enum": ["answer_free", "protected", "unknown"]},
+        "source_sentence": {"type": ["string", "null"]},
+        "sentence_sha256": {"oneOf": [{"$ref": "#/$defs/sha256"}, {"type": "null"}]}
+      }
+    },
+    "historyEpisode": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["state", "summary", "observed_date", "evidence_ref_indexes"],
+      "properties": {
+        "state": {"enum": ["independent", "guided", "unresolved", "transfer_verified"]},
+        "summary": {"type": "string", "minLength": 1, "maxLength": 1024},
+        "observed_date": {"type": "string", "format": "date"},
+        "evidence_ref_indexes": {"type": "array", "items": {"type": "integer", "minimum": 0}}
+      }
+    },
+    "record": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["package_id", "package_sha256", "record_kind", "source_identity", "evidence_refs", "paragraph_context", "history_episodes", "teaching_cues", "vocabulary_candidates"],
+      "properties": {
+        "package_id": {"type": "string"},
+        "package_sha256": {"$ref": "#/$defs/sha256"},
+        "record_kind": {"enum": ["sentence", "protected_sidecar"]},
+        "source_identity": {"$ref": "#/$defs/sourceIdentity"},
+        "evidence_refs": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/evidenceRef"}},
+        "paragraph_context": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["text", "locator", "evidence_ref_indexes"],
+          "properties": {
+            "text": {"type": ["string", "null"], "maxLength": 4096},
+            "locator": {"type": ["string", "null"], "maxLength": 1024},
+            "evidence_ref_indexes": {"type": "array", "items": {"type": "integer", "minimum": 0}}
+          }
+        },
+        "history_episodes": {"type": "array", "maxItems": 8, "items": {"$ref": "#/$defs/historyEpisode"}},
+        "teaching_cues": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["correct_observations", "first_breaks", "structure_cues", "meaning_constraints", "effective_explanations", "next_read_actions"],
+          "properties": {
+            "correct_observations": {"$ref": "#/$defs/cueList"},
+            "first_breaks": {"$ref": "#/$defs/cueList"},
+            "structure_cues": {"$ref": "#/$defs/cueList"},
+            "meaning_constraints": {"$ref": "#/$defs/cueList"},
+            "effective_explanations": {"$ref": "#/$defs/cueList"},
+            "next_read_actions": {"$ref": "#/$defs/cueList"}
+          }
+        },
+        "vocabulary_candidates": {
+          "type": "array",
+          "maxItems": 16,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["item", "kind", "evidence_ref_indexes"],
+            "properties": {
+              "item": {"type": "string", "minLength": 1, "maxLength": 256},
+              "kind": {"enum": ["word", "phrase", "familiar_new_meaning", "function_expression"]},
+              "evidence_ref_indexes": {"type": "array", "items": {"type": "integer", "minimum": 0}}
+            }
+          }
+        }
+      }
+    },
+    "cueList": {
+      "type": "array",
+      "maxItems": 8,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["text", "evidence_state", "evidence_ref_indexes"],
+        "properties": {
+          "text": {"type": "string", "minLength": 1, "maxLength": 1024},
+          "evidence_state": {"enum": ["independent", "guided", "unresolved", "transfer_verified"]},
+          "evidence_ref_indexes": {"type": "array", "minItems": 1, "items": {"type": "integer", "minimum": 0}}
+        }
+      }
+    }
+  }
+}

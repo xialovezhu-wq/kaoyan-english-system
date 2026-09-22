@@ -1,0 +1,4 @@
+interface:
+  display_name: "考研英语按点个性化精读"
+  short_description: "先诊断再按知识点哈希读取摘要；学完按需整单元保存，正式入库才更新摘要"
+  default_prompt: "Use $kaoyan-english-intensive-reading with the user's selected DeepSeek V4.1 Flash provider. Diagnose the current attempt first, query point hashes once, read and use matched summaries, and stop lookup on a miss. Capture the complete multi-turn unit only when saving is authorized. Personal summaries update only during formal intake."

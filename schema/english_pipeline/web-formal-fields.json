@@ -1,0 +1,134 @@
+{
+  "master_bank_insert": {
+    "row_columns": [
+      "id",
+      "date",
+      "type",
+      "item",
+      "source_article",
+      "source_sentence",
+      "meaning",
+      "usage",
+      "writing_value",
+      "tags",
+      "review_note",
+      "appear_count",
+      "last_seen"
+    ],
+    "id": "Leave empty; allocated locally",
+    "type_values": [
+      "写作表达",
+      "单词",
+      "句型",
+      "熟词僻义",
+      "词组",
+      "长难句"
+    ],
+    "writing_value_values": [
+      "一般",
+      "不建议",
+      "适合"
+    ]
+  },
+  "master_bank_update": {
+    "record_id": "Existing actual bank ID",
+    "updates_fields": [
+      "appear_count",
+      "last_seen",
+      "meaning",
+      "review_note",
+      "source_sentence",
+      "tags",
+      "usage"
+    ]
+  },
+  "sentence_pattern_append": {
+    "fields": [
+      "title",
+      "骨架",
+      "难度等级",
+      "基本句型",
+      "从句类型",
+      "场景标签",
+      "可复用程度",
+      "中文解释",
+      "结构拆解",
+      "生成模板",
+      "相关词汇/搭配",
+      "常用变体",
+      "来源与示例",
+      "use_count",
+      "last_used"
+    ],
+    "list_fields": [
+      "结构拆解",
+      "来源与示例"
+    ]
+  },
+  "sentence_pattern_merge": {
+    "existing_sp_id": "Existing actual SP ID",
+    "additions": {
+      "来源与示例": "array of exact source examples",
+      "常用变体": "array of complete text additions",
+      "相关词汇/搭配": "array of complete text additions",
+      "use_count_increment": "integer supported by actual distinct use evidence",
+      "last_used": "original study date"
+    }
+  },
+  "mastered_insert": {
+    "row_columns": [
+      "item",
+      "matched_id",
+      "matched_type",
+      "mastered_date",
+      "evidence_sentence",
+      "evidence_context",
+      "proof_note"
+    ],
+    "requires": "independent_correct_use exact actual user evidence; web adjudication is never mastery"
+  },
+  "learning_event_append": {
+    "schema": "contracts/learning-event.schema.json",
+    "date": "Preserve actual learner observation date; local script emits adjudication separately"
+  },
+  "native_action_fields": {
+    "master_bank_insert": [
+      "row"
+    ],
+    "master_bank_update": [
+      "record_id",
+      "updates"
+    ],
+    "sentence_pattern_append": [
+      "fields"
+    ],
+    "sentence_pattern_merge": [
+      "existing_sp_id",
+      "additions"
+    ],
+    "skip_duplicate": [
+      "target",
+      "item"
+    ],
+    "learning_event_append": [
+      "event"
+    ],
+    "review_exclusion_append": [
+      "item",
+      "bank_id",
+      "sentence_evidence"
+    ],
+    "review_reactivation_append": [
+      "item",
+      "bank_id",
+      "sentence_evidence"
+    ]
+  },
+  "common_required": [
+    "action_id",
+    "action_type",
+    "reason",
+    "evidence_refs"
+  ],
+  "rule": "Each action uses exactly its common+native fields; no paths, shell, SQL or ID allocation. Completed semantic values only. Each action stays within one original study date."
+}

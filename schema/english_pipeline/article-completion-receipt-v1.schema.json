@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://local.kaoyan-english/schema/english_pipeline/article-completion-receipt-v1.schema.json",
+  "title": "Article completion and immediate A/B/C receipt v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "receipt_id", "completion_event_id", "capture_status", "article_id", "source_id", "study_date", "effective_capture_event_ids", "export_json", "export_markdown", "tier_counts", "formal_write_count", "formal_writeback", "formal_sources_unchanged"],
+  "properties": {
+    "schema_version": {"const": "english_article_completion_receipt_v1"},
+    "receipt_id": {"type": "string", "minLength": 1},
+    "completion_event_id": {"type": "string", "minLength": 1},
+    "capture_status": {"enum": ["created", "idempotent_noop"]},
+    "article_id": {"type": "string", "minLength": 1},
+    "source_id": {"type": "string", "minLength": 1},
+    "study_date": {"type": "string", "format": "date"},
+    "effective_capture_event_ids": {"type": "array", "uniqueItems": true, "items": {"type": "string"}},
+    "export_json": {"type": "string", "minLength": 1},
+    "export_markdown": {"type": "string", "minLength": 1},
+    "tier_counts": {
+      "type": "object", "additionalProperties": false, "required": ["A", "B", "C"],
+      "properties": {"A": {"type": "integer", "minimum": 0}, "B": {"type": "integer", "minimum": 0}, "C": {"type": "integer", "minimum": 0}}
+    },
+    "formal_write_count": {"const": 0},
+    "formal_writeback": {"const": "none"},
+    "formal_sources_unchanged": {"const": true}
+  }
+}

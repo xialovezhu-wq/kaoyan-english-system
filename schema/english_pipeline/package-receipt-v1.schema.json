@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://local.kaoyan-english/schema/english_pipeline/package-receipt-v1.schema.json",
+  "title": "English conversation package receipt v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "receipt_id", "package_id", "package_sha256", "manifest_sha256", "status", "replayed", "study_date", "missing_fields", "formal_write_count", "background_processing", "package_path"],
+  "properties": {
+    "schema_version": {"const": "english_package_receipt_v1"},
+    "receipt_id": {"type": "string"},
+    "package_id": {"type": "string"},
+    "package_sha256": {"$ref": "#/$defs/sha256"},
+    "manifest_sha256": {"$ref": "#/$defs/sha256"},
+    "status": {"enum": ["created", "idempotent_noop"]},
+    "replayed": {"type": "boolean"},
+    "study_date": {"type": "string", "format": "date"},
+    "missing_fields": {"type": "array", "items": {"type": "string"}},
+    "formal_write_count": {"const": 0},
+    "background_processing": {"const": "none"},
+    "package_path": {"type": "string"}
+  },
+  "$defs": {"sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"}}
+}

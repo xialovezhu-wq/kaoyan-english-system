@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://local.kaoyan-english/schema/english_pipeline/conversation-v1.schema.json",
+  "title": "Ordered English conversation v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "messages", "message_count"],
+  "properties": {
+    "schema_version": {"const": "english_conversation_v1"},
+    "message_count": {"type": "integer", "minimum": 1},
+    "messages": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["sequence", "role", "content", "attachment_refs"],
+        "properties": {
+          "sequence": {"type": "integer", "minimum": 1},
+          "role": {"enum": ["user", "assistant"]},
+          "content": {"type": "string"},
+          "attachment_refs": {"type": "array", "items": {"type": "string"}},
+          "message_id": {"type": "string"},
+          "created_at": {"type": "string"},
+          "metadata": {"type": "object"}
+        }
+      }
+    }
+  }
+}

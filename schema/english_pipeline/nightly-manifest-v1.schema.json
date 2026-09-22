@@ -1,0 +1,69 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://local.kaoyan-english/schema/english_pipeline/nightly-manifest-v1.schema.json",
+  "title": "Immutable nightly batch manifest v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "batch_id", "study_date", "frozen_at", "candidate_documents", "runtime_identity_summary", "capture_event_ids", "source_snapshot", "uncovered_capture_event_ids", "formal_snapshot", "authorization", "status"],
+  "properties": {
+    "schema_version": {"const": "english_nightly_manifest_v1"},
+    "batch_id": {"type": "string", "pattern": "^EN-BATCH-[0-9]{8}-[A-F0-9]{12}$"},
+    "study_date": {"type": "string", "format": "date"}, "frozen_at": {"type": "string", "format": "date-time"},
+    "candidate_documents": {"type": "array", "items": {"$ref": "#/$defs/candidateDocument"}},
+    "runtime_identity_summary": {"$ref": "#/$defs/runtimeIdentitySummary"},
+    "capture_event_ids": {"type": "array", "uniqueItems": true, "items": {"type": "string"}},
+    "source_snapshot": {"$ref": "#/$defs/sourceSnapshot"},
+    "uncovered_capture_event_ids": {"type": "array", "uniqueItems": true, "items": {"type": "string"}},
+    "formal_snapshot": {"$ref": "#/$defs/formalSnapshot"},
+    "authorization": {"$ref": "#/$defs/authorization"},
+    "status": {"enum": ["frozen", "needs_preprocess", "NOOP"]}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "candidateDocument": {
+      "type": "object", "additionalProperties": false, "required": ["path", "sha256", "candidate_id", "runtime_identity_status"],
+      "properties": {"path": {"type": "string"}, "sha256": {"$ref": "#/$defs/sha256"}, "candidate_id": {"type": "string"}, "runtime_identity_status": {"enum": ["confirmed", "requested_unverified", "mismatch", "unavailable"]}}
+    },
+    "runtimeIdentitySummary": {
+      "type": "object", "additionalProperties": false,
+      "required": ["confirmed", "requested_unverified", "mismatch", "unavailable"],
+      "properties": {
+        "confirmed": {"type": "array", "uniqueItems": true, "items": {"type": "string"}},
+        "requested_unverified": {"type": "array", "uniqueItems": true, "items": {"type": "string"}},
+        "mismatch": {"type": "array", "uniqueItems": true, "items": {"type": "string"}},
+        "unavailable": {"type": "array", "uniqueItems": true, "items": {"type": "string"}}
+      }
+    },
+    "hashMap": {"type": "object", "additionalProperties": {"$ref": "#/$defs/sha256"}},
+    "sourceSnapshot": {
+      "type": "object", "additionalProperties": false, "required": ["article_source_hashes", "sentence_hashes"],
+      "properties": {"article_source_hashes": {"$ref": "#/$defs/hashMap"}, "sentence_hashes": {"$ref": "#/$defs/hashMap"}}
+    },
+    "formalSnapshot": {
+      "type": "object", "additionalProperties": false, "required": ["master_bank", "mastered_items", "sentence_patterns"],
+      "properties": {
+        "master_bank": {"$ref": "#/$defs/csv13"}, "mastered_items": {"$ref": "#/$defs/csv7"}, "sentence_patterns": {"$ref": "#/$defs/sp15"}
+      }
+    },
+    "csv13": {
+      "type": "object", "additionalProperties": false, "required": ["path", "sha256", "column_count", "header", "row_count"],
+      "properties": {"path": {"type": "string"}, "sha256": {"$ref": "#/$defs/sha256"}, "column_count": {"const": 13}, "header": {"type": "array", "minItems": 13, "maxItems": 13, "items": {"type": "string"}}, "row_count": {"type": "integer", "minimum": 0}}
+    },
+    "csv7": {
+      "type": "object", "additionalProperties": false, "required": ["path", "sha256", "column_count", "header", "row_count"],
+      "properties": {"path": {"type": "string"}, "sha256": {"$ref": "#/$defs/sha256"}, "column_count": {"const": 7}, "header": {"type": "array", "minItems": 7, "maxItems": 7, "items": {"type": "string"}}, "row_count": {"type": "integer", "minimum": 0}}
+    },
+    "sp15": {
+      "type": "object", "additionalProperties": false, "required": ["path", "sha256", "field_count", "fields", "card_count"],
+      "properties": {"path": {"type": "string"}, "sha256": {"$ref": "#/$defs/sha256"}, "field_count": {"const": 15}, "fields": {"type": "array", "minItems": 15, "maxItems": 15, "items": {"type": "string"}}, "card_count": {"type": "integer", "minimum": 0}}
+    },
+    "authorization": {
+      "type": "object", "additionalProperties": false, "required": ["command", "batch_id", "study_date", "authorized", "authorized_at", "scope"],
+      "properties": {
+        "command": {"const": "apply-nightly"}, "batch_id": {"type": "string"}, "study_date": {"type": "string", "format": "date"},
+        "authorized": {"const": false}, "authorized_at": {"type": "null"},
+        "scope": {"type": "array", "prefixItems": [{"const": "master_bank"}, {"const": "mastered_items"}, {"const": "sentence_patterns"}], "items": false, "minItems": 3, "maxItems": 3}
+      }
+    }
+  }
+}

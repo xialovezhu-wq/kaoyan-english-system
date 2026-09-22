@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://local.kaoyan-english/schema/english_pipeline/sentence-support-record-v1.schema.json",
+  "title": "Bounded content-addressed English sentence-support record v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "status", "answer_safe", "record_kind", "support_key", "source_identity", "paragraph_context", "history_episodes", "history_episode_count", "history_complete_through", "latest_refresh_study_date", "history_coverage_status", "history_excluded_package_ids", "teaching_cues", "vocabulary_candidates", "package_bindings", "formal_refs", "latest_episode", "previous_record", "source_replaced", "formal_write_count", "background_processing"],
+  "properties": {
+    "schema_version": {"const": "english_sentence_support_record_v1"},
+    "status": {"enum": ["ready", "protected_sidecar"]},
+    "answer_safe": {"type": "boolean"},
+    "record_kind": {"enum": ["sentence", "protected_sidecar"]},
+    "support_key": {"type": "string"},
+    "source_identity": {"type": "object"},
+    "paragraph_context": {"type": "object"},
+    "history_episodes": {"type": "array", "maxItems": 8},
+    "history_episode_count": {"type": "integer", "minimum": 0, "maximum": 8},
+    "history_complete_through": {"type": ["string", "null"], "format": "date"},
+    "latest_refresh_study_date": {"type": "string", "format": "date"},
+    "history_coverage_status": {"enum": ["complete_local_date", "package_subset", "needs_user_excluded"]},
+    "history_excluded_package_ids": {"type": "array", "items": {"type": "string"}},
+    "teaching_cues": {"type": "object"},
+    "vocabulary_candidates": {"type": "array", "maxItems": 16},
+    "package_bindings": {"type": "array", "maxItems": 32, "items": {"type": "object"}},
+    "formal_refs": {"type": "object"},
+    "latest_episode": {"type": "object"},
+    "previous_record": {"type": ["object", "null"]},
+    "source_replaced": {"type": "boolean"},
+    "formal_write_count": {"const": 0},
+    "background_processing": {"const": "none"}
+  }
+}

@@ -1,0 +1,63 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://local.kaoyan-english/schema/english_pipeline/sol-actions-v1.schema.json",
+  "title": "Typed Sol action proposal v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "action_set_id", "batch_id", "batch_manifest_sha256", "created_at", "producer", "formal_write_count", "formal_writeback", "actions", "unresolved"],
+  "properties": {
+    "schema_version": {"const": "english_sol_actions_v1"}, "action_set_id": {"type": "string"}, "batch_id": {"type": "string"},
+    "batch_manifest_sha256": {"$ref": "#/$defs/sha256"}, "created_at": {"type": "string", "format": "date-time"},
+    "producer": {"type": "object", "additionalProperties": false, "required": ["role", "model", "prompt_version"], "properties": {"role": {"const": "sol_nightly_reviewer"}, "model": {"type": "string"}, "prompt_version": {"type": "string"}}},
+    "formal_write_count": {"const": 0}, "formal_writeback": {"const": "none"},
+    "actions": {"type": "array", "items": {"$ref": "#/$defs/action"}},
+    "unresolved": {"type": "array", "items": {"$ref": "#/$defs/unresolved"}}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "baseProperties": {
+      "action_id": {"type": "string", "minLength": 1}, "reason": {"type": "string", "minLength": 1},
+      "source_capture_event_ids": {"type": "array", "minItems": 1, "items": {"type": "string"}}
+    },
+    "masterRow": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "date", "type", "item", "source_article", "source_sentence", "meaning", "usage", "writing_value", "tags", "review_note", "appear_count", "last_seen"],
+      "properties": {
+        "id": {"const": ""}, "date": {"type": "string", "format": "date"}, "type": {"enum": ["单词", "词组", "熟词僻义", "句型", "长难句", "写作表达"]},
+        "item": {"type": "string", "minLength": 1}, "source_article": {"type": "string", "minLength": 1}, "source_sentence": {"type": "string", "minLength": 1},
+        "meaning": {"type": "string"}, "usage": {"type": "string"}, "writing_value": {"enum": ["适合", "一般", "不建议"]},
+        "tags": {"type": "string"}, "review_note": {"type": "string"}, "appear_count": {"type": "integer", "minimum": 1}, "last_seen": {"type": "string", "format": "date"}
+      }
+    },
+    "masteredRow": {
+      "type": "object", "additionalProperties": false, "required": ["item", "matched_id", "matched_type", "mastered_date", "evidence_sentence", "evidence_context", "proof_note"],
+      "properties": {"item": {"type": "string", "minLength": 1}, "matched_id": {"type": "string"}, "matched_type": {"type": "string"}, "mastered_date": {"type": "string", "format": "date"}, "evidence_sentence": {"type": "string", "minLength": 1}, "evidence_context": {"type": "string", "minLength": 1}, "proof_note": {"type": "string", "minLength": 1}}
+    },
+    "spFields": {
+      "type": "object", "additionalProperties": false,
+      "required": ["title", "骨架", "难度等级", "基本句型", "从句类型", "场景标签", "可复用程度", "中文解释", "结构拆解", "生成模板", "相关词汇/搭配", "常用变体", "来源与示例", "use_count", "last_used"],
+      "properties": {
+        "title": {"type": "string", "minLength": 1, "not": {"pattern": "SP-[0-9]{3}"}}, "骨架": {"type": "string"},
+        "难度等级": {"enum": ["简单句", "并列句", "复合句", "并列复合句", "不限"]}, "基本句型": {"enum": ["主谓", "主谓宾", "主系表", "主谓双宾", "主谓宾宾补", "不限"]},
+        "从句类型": {"type": "string"}, "场景标签": {"type": "string"}, "可复用程度": {"type": "string"}, "中文解释": {"type": "string"},
+        "结构拆解": {"type": "array", "minItems": 1, "items": {"type": "string"}}, "生成模板": {"type": "string"}, "相关词汇/搭配": {"type": "string"},
+        "常用变体": {"type": "string"}, "来源与示例": {"type": "array", "minItems": 1, "items": {"type": "string"}},
+        "use_count": {"type": "integer", "minimum": 0}, "last_used": {"type": "string", "format": "date"}
+      }
+    },
+    "action": {
+      "oneOf": [
+        {"type": "object", "additionalProperties": false, "required": ["action_id", "action_type", "reason", "source_capture_event_ids", "row"], "properties": {"action_id": {"type": "string"}, "action_type": {"const": "master_bank_insert"}, "reason": {"type": "string"}, "source_capture_event_ids": {"type": "array", "minItems": 1, "items": {"type": "string"}}, "row": {"$ref": "#/$defs/masterRow"}}},
+        {"type": "object", "additionalProperties": false, "required": ["action_id", "action_type", "reason", "source_capture_event_ids", "record_id", "updates"], "properties": {"action_id": {"type": "string"}, "action_type": {"const": "master_bank_update"}, "reason": {"type": "string"}, "source_capture_event_ids": {"type": "array", "minItems": 1, "items": {"type": "string"}}, "record_id": {"type": "string"}, "updates": {"type": "object", "minProperties": 1, "additionalProperties": false, "properties": {"usage": {"type": "string"}, "tags": {"type": "string"}, "review_note": {"type": "string"}, "appear_count": {"type": "integer", "minimum": 1}, "last_seen": {"type": "string", "format": "date"}}}}},
+        {"type": "object", "additionalProperties": false, "required": ["action_id", "action_type", "reason", "source_capture_event_ids", "mastery_evidence_kind", "row"], "properties": {"action_id": {"type": "string"}, "action_type": {"const": "mastered_insert"}, "reason": {"type": "string"}, "source_capture_event_ids": {"type": "array", "minItems": 1, "items": {"type": "string"}}, "mastery_evidence_kind": {"const": "independent_correct_use"}, "row": {"$ref": "#/$defs/masteredRow"}}},
+        {"type": "object", "additionalProperties": false, "required": ["action_id", "action_type", "reason", "source_capture_event_ids", "fields"], "properties": {"action_id": {"type": "string"}, "action_type": {"const": "sentence_pattern_append"}, "reason": {"type": "string"}, "source_capture_event_ids": {"type": "array", "minItems": 1, "items": {"type": "string"}}, "fields": {"$ref": "#/$defs/spFields"}}},
+        {"type": "object", "additionalProperties": false, "required": ["action_id", "action_type", "reason", "source_capture_event_ids", "existing_sp_id", "additions"], "properties": {"action_id": {"type": "string"}, "action_type": {"const": "sentence_pattern_merge"}, "reason": {"type": "string"}, "source_capture_event_ids": {"type": "array", "minItems": 1, "items": {"type": "string"}}, "existing_sp_id": {"type": "string", "pattern": "^SP-[0-9]{3}$"}, "additions": {"type": "object", "minProperties": 1, "additionalProperties": false, "properties": {"来源与示例": {"type": "array", "items": {"type": "string"}}, "常用变体": {"type": "array", "items": {"type": "string"}}, "相关词汇/搭配": {"type": "array", "items": {"type": "string"}}, "use_count_increment": {"type": "integer", "minimum": 0}, "last_used": {"type": "string", "format": "date"}}}}},
+        {"type": "object", "additionalProperties": false, "required": ["action_id", "action_type", "reason", "source_capture_event_ids", "target", "item"], "properties": {"action_id": {"type": "string"}, "action_type": {"const": "skip_duplicate"}, "reason": {"type": "string"}, "source_capture_event_ids": {"type": "array", "minItems": 1, "items": {"type": "string"}}, "target": {"enum": ["master_bank", "mastered_items", "sentence_patterns"]}, "item": {"type": "string"}}}
+      ]
+    },
+    "unresolved": {
+      "type": "object", "additionalProperties": false, "required": ["action_id", "status", "reason", "source_capture_event_ids", "target", "item"],
+      "properties": {"action_id": {"type": "string"}, "status": {"const": "needs_user"}, "reason": {"type": "string"}, "source_capture_event_ids": {"type": "array", "minItems": 1, "items": {"type": "string"}}, "target": {"enum": ["master_bank", "mastered_items", "sentence_patterns"]}, "item": {"type": "string"}}
+    }
+  }
+}

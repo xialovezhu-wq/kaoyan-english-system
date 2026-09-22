@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://local.kaoyan-english/schema/english_pipeline/segment-gate-recovery-receipt-v1.schema.json",
+  "title": "Precise English segment gate recovery receipt v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "status", "thread_ref_sha256", "frontier_event_count",
+    "appended_segment_keys", "current_token_sha256", "continuation_token",
+    "current_projection_path", "formal_write_count", "background_processing"
+  ],
+  "properties": {
+    "schema_version": {"const": "english_segment_gate_recovery_receipt_v1"},
+    "status": {"const": "PASS"},
+    "thread_ref_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "frontier_event_count": {"type": "integer", "minimum": 0},
+    "appended_segment_keys": {"type": "array", "items": {"type": "string"}},
+    "current_token_sha256": {"type": ["string", "null"]},
+    "continuation_token": {"type": ["object", "null"]},
+    "current_projection_path": {"type": "string"},
+    "formal_write_count": {"const": 0},
+    "background_processing": {"const": "none"}
+  }
+}

@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://local.kaoyan-english/schema/english_pipeline/recovery-receipt-v1.schema.json",
+  "title": "Formal transaction recovery receipt v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "receipt_id", "receipt_path", "status", "recovered", "formal_write_count"],
+  "properties": {
+    "schema_version": {"const": "english_recovery_receipt_v1"},
+    "receipt_id": {"type": "string", "pattern": "^EN-RECOVERY-[A-F0-9]{16}$"},
+    "receipt_path": {"type": "string", "minLength": 1},
+    "status": {"enum": ["PASS", "PARTIAL"]},
+    "recovered": {"type": "array", "items": {"$ref": "#/$defs/recoveryResult"}},
+    "formal_write_count": {"const": 0}
+  },
+  "$defs": {
+    "recoveryResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["transaction", "status"],
+      "properties": {
+        "transaction": {"type": "string", "minLength": 1},
+        "status": {"enum": ["skipped", "failed", "RECOVERED_COMMIT_WITH_RECEIPT", "RECOVERED_ROLLBACK"]},
+        "reason": {"type": ["string", "null"]}
+      }
+    }
+  }
+}

@@ -1,0 +1,95 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://local.kaoyan-english/schema/english_pipeline/legacy-reachability-audit-v2.schema.json",
+  "title": "Read-only legacy capture event reachability and retirement audit v2",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "cutoff_date",
+    "source_event_count",
+    "event_count",
+    "actionable_event_count",
+    "counts",
+    "events",
+    "retirement_registry_count",
+    "retirement_registry_errors",
+    "migration_performed",
+    "formal_write_count",
+    "background_processing",
+    "audit_sha256"
+  ],
+  "properties": {
+    "schema_version": {"const": "english_legacy_capture_reachability_audit_v2"},
+    "cutoff_date": {"type": "string", "format": "date"},
+    "source_event_count": {"type": "integer", "minimum": 0},
+    "event_count": {"type": "integer", "minimum": 0},
+    "actionable_event_count": {"type": "integer", "minimum": 0},
+    "counts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["needs_user", "eligible", "user_removed"],
+      "properties": {
+        "needs_user": {"type": "integer", "minimum": 0},
+        "eligible": {"type": "integer", "minimum": 0},
+        "user_removed": {"type": "integer", "minimum": 0}
+      }
+    },
+    "events": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "event_id",
+          "study_date",
+          "event_path",
+          "status",
+          "reason",
+          "actionable",
+          "migration_performed"
+        ],
+        "properties": {
+          "event_id": {"type": "string"},
+          "study_date": {"type": "string", "format": "date"},
+          "event_path": {"type": "string"},
+          "status": {
+            "enum": [
+              "eligible-for-explicit-migration",
+              "needs_user",
+              "user_removed"
+            ]
+          },
+          "reason": {"type": "string"},
+          "actionable": {"type": "boolean"},
+          "migration_performed": {"const": false},
+          "disposition": {"const": "user_removed"},
+          "authority": {"const": "explicit_user_request"},
+          "retirement_id": {
+            "type": "string",
+            "pattern": "^EN-LEGACY-RETIRE-[a-f0-9]{64}$"
+          },
+          "retirement_sha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "retirement_path": {"type": "string"}
+        }
+      }
+    },
+    "retirement_registry_count": {"type": "integer", "minimum": 0},
+    "retirement_registry_errors": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["registry_path", "reason"],
+        "properties": {
+          "registry_path": {"type": "string"},
+          "reason": {"type": "string"}
+        }
+      }
+    },
+    "migration_performed": {"const": false},
+    "formal_write_count": {"const": 0},
+    "background_processing": {"const": "none"},
+    "audit_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"}
+  }
+}

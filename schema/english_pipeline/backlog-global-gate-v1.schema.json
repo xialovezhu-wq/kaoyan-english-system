@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://local.kaoyan-english/schema/english_pipeline/backlog-global-gate-v1.schema.json",
+  "title": "English package backlog global gate v1",
+  "type": "object",
+  "required": [
+    "schema_version", "status", "plan_id", "plan_canonical_sha256", "cutoff_date",
+    "completed", "already_consumed", "needs_user", "failed", "archive_pending", "gate_sha256"
+  ],
+  "properties": {
+    "schema_version": {"const": "english_package_backlog_global_gate_v1"},
+    "status": {"enum": ["COMPLETE", "PARTIAL", "NOOP"]},
+    "plan_id": {"type": "string"},
+    "plan_canonical_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "cutoff_date": {"type": "string", "format": "date"},
+    "legacy_reachability_audit": {"type": ["object", "null"]},
+    "completed": {"$ref": "#/$defs/results"},
+    "already_consumed": {"$ref": "#/$defs/results"},
+    "needs_user": {"$ref": "#/$defs/results"},
+    "failed": {"$ref": "#/$defs/results"},
+    "archive_pending": {"$ref": "#/$defs/results"},
+    "gate_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"}
+  },
+  "$defs": {
+    "results": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["package_id", "study_date", "reason"],
+        "properties": {
+          "package_id": {"type": "string"},
+          "study_date": {"type": "string", "format": "date"},
+          "reason": {"type": ["string", "null"]},
+          "pending_component": {"enum": ["support_refresh", "display_assets", "locator", "archive", "cleanup", null]}
+        }
+      }
+    }
+  }
+}

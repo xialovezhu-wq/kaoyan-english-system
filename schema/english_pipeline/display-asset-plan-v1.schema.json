@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://local.kaoyan-english/schema/english_pipeline/display-asset-plan-v1.schema.json",
+  "title": "English package-external display asset plan v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "plan_id", "package_id", "package_sha256", "manifest_sha256", "study_date", "source_id", "article_id", "question_id", "target_article_relative_path", "temporary_package_path", "assets", "stable_asset_count", "no_display", "formal_write_count"],
+  "properties": {
+    "schema_version": {"const": "english_display_asset_plan_v1"},
+    "plan_id": {"type": "string", "pattern": "^EN-DISPLAY-PLAN-[A-F0-9]{16}$"},
+    "package_id": {"type": "string", "pattern": "^EN-PKG-[0-9]{8}-[A-F0-9]{16}$"},
+    "package_sha256": {"$ref": "#/$defs/sha256"},
+    "manifest_sha256": {"$ref": "#/$defs/sha256"},
+    "study_date": {"type": "string", "format": "date"},
+    "source_id": {"type": "string"},
+    "article_id": {"type": "string"},
+    "question_id": {"type": "string"},
+    "target_article_relative_path": {"type": ["string", "null"]},
+    "temporary_package_path": {"type": "string"},
+    "assets": {"type": "array", "items": {"$ref": "#/$defs/asset"}},
+    "stable_asset_count": {"type": "integer", "minimum": 0},
+    "no_display": {"type": "boolean"},
+    "formal_write_count": {"const": 0}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "asset": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["attachment_id", "attachment_role", "package_relative_path", "mime_type", "bytes", "source_sha256", "stable_vault_relative_path", "host_markdown_relative_path", "visibility", "disposition"],
+      "properties": {
+        "attachment_id": {"type": "string"},
+        "attachment_role": {"enum": ["question_image", "solution_image", "explanation_image", "user_work_image", "source_article_image", "other_attachment"]},
+        "package_relative_path": {"type": "string"},
+        "mime_type": {"type": "string"},
+        "bytes": {"type": "integer", "minimum": 0},
+        "source_sha256": {"$ref": "#/$defs/sha256"},
+        "stable_vault_relative_path": {"type": ["string", "null"]},
+        "host_markdown_relative_path": {"type": ["string", "null"]},
+        "visibility": {"enum": ["practice_safe", "protected", "archive_only"]},
+        "disposition": {"enum": ["promoted", "already_stable", "archive_only", "no_display"]}
+      }
+    }
+  }
+}

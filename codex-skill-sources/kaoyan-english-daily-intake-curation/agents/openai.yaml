@@ -1,0 +1,4 @@
+interface:
+  display_name: "考研英语正式入库与真实回流"
+  short_description: "逐日编纂或处理明确授权的真实回流，保留单写者与后置恢复"
+  default_prompt: "Use $kaoyan-english-daily-intake-curation for the explicitly authorized cutoff or exact real-learning/A-decision episode, preserve complete evidence and original dates, and finish the typed-writer, current-context and recoverable publication chain without background models."

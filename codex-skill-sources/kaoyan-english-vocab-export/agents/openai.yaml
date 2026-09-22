@@ -1,0 +1,4 @@
+interface:
+  display_name: "考研英语正式闭环后的 BBDC 导出"
+  short_description: "正式闭环后交给所选 DeepSeek，按原文与当前掌握状态输出完整 BBDC"
+  default_prompt: "Use $kaoyan-english-vocab-export from the verified formal-ready handoff, preserve my selected DeepSeek V4.1 Flash provider identity, and produce the complete source-backed BBDC A/B/C output without formal writes."

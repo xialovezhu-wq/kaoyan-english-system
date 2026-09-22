@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://local.kaoyan-english/schema/english_pipeline/segment-frontier-event-v1.schema.json",
+  "title": "Append-only English segment frontier event v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "event_type", "thread_ref_sha256", "study_date",
+    "segment_key", "request_sha256", "package_id", "package_sha256",
+    "manifest_sha256", "captured_at", "previous_token_sha256",
+    "continuation_token", "token_sha256", "formal_write_count", "background_processing"
+  ],
+  "properties": {
+    "schema_version": {"const": "english_segment_frontier_event_v1"},
+    "event_type": {"const": "segment_committed"},
+    "thread_ref_sha256": {"$ref": "#/$defs/sha256"},
+    "study_date": {"type": "string", "format": "date"},
+    "segment_key": {"type": "string", "minLength": 1},
+    "request_sha256": {"$ref": "#/$defs/sha256"},
+    "package_id": {"type": "string"},
+    "package_sha256": {"$ref": "#/$defs/sha256"},
+    "manifest_sha256": {"$ref": "#/$defs/sha256"},
+    "captured_at": {"type": "string", "format": "date-time"},
+    "previous_token_sha256": {"oneOf": [{"$ref": "#/$defs/sha256"}, {"type": "null"}]},
+    "continuation_token": {"type": "object"},
+    "token_sha256": {"$ref": "#/$defs/sha256"},
+    "formal_write_count": {"const": 0},
+    "background_processing": {"const": "none"}
+  },
+  "$defs": {"sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"}}
+}

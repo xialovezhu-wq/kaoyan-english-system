@@ -1,0 +1,132 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "English formal learning event payload; only the typed writer may append it",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "event_key",
+    "kind",
+    "origin",
+    "task_id",
+    "source_commit",
+    "source_id",
+    "unit_id",
+    "bank_ids",
+    "sentence_pattern_ids",
+    "concept_ids",
+    "observed_at",
+    "outcome",
+    "hint_dependence",
+    "reasoning_status",
+    "user_response",
+    "reasoning",
+    "correction"
+  ],
+  "properties": {
+    "event_key": {
+      "type": "string",
+      "minLength": 1
+    },
+    "kind": {
+      "enum": [
+        "answer",
+        "correction",
+        "review",
+        "adjudication"
+      ]
+    },
+    "origin": {
+      "enum": [
+        "daily",
+        "project-A",
+        "project-B",
+        "project-C",
+        "project-D",
+        "project-E"
+      ]
+    },
+    "task_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "source_commit": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "pattern": "^[0-9a-f]{40}([0-9a-f]{24})?$"
+    },
+    "source_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "unit_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "bank_ids": {
+      "type": "array",
+      "uniqueItems": true,
+      "maxItems": 16,
+      "items": {
+        "type": "string"
+      }
+    },
+    "sentence_pattern_ids": {
+      "type": "array",
+      "uniqueItems": true,
+      "maxItems": 16,
+      "items": {
+        "type": "string"
+      }
+    },
+    "concept_ids": {
+      "type": "array",
+      "uniqueItems": true,
+      "maxItems": 16,
+      "items": {
+        "type": "string"
+      }
+    },
+    "observed_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "outcome": {
+      "enum": [
+        "correct",
+        "incorrect",
+        "unresolved",
+        "accepted",
+        "modified",
+        "rejected"
+      ]
+    },
+    "hint_dependence": {
+      "enum": [
+        "none",
+        "hint",
+        "explanation",
+        "not_observed"
+      ]
+    },
+    "reasoning_status": {
+      "enum": [
+        "valid",
+        "invalid",
+        "not_observed"
+      ]
+    },
+    "user_response": {
+      "type": "string"
+    },
+    "reasoning": {
+      "type": "string"
+    },
+    "correction": {
+      "type": "string"
+    }
+  }
+}

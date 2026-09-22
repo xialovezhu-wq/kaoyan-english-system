@@ -1,0 +1,93 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://local.kaoyan-english/schema/english_pipeline/article-export-v1.schema.json",
+  "title": "Output-only article A/B/C export v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "export_id",
+    "completion_event_id",
+    "article_id",
+    "source_id",
+    "study_date",
+    "generated_at",
+    "formal_write_count",
+    "formal_writeback",
+    "tiers",
+    "exclusions",
+    "formal_hashes_before",
+    "formal_hashes_after"
+  ],
+  "properties": {
+    "schema_version": {"const": "english_article_export_v1"},
+    "export_id": {"type": "string", "minLength": 1},
+    "completion_event_id": {"type": "string"},
+    "article_id": {"type": "string"},
+    "source_id": {"type": "string"},
+    "study_date": {"type": "string", "format": "date"},
+    "generated_at": {"type": "string", "format": "date-time"},
+    "formal_write_count": {"const": 0},
+    "formal_writeback": {"const": "none"},
+    "tiers": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["A", "B", "C"],
+      "properties": {
+        "A": {"type": "array", "items": {"$ref": "#/$defs/card"}},
+        "B": {"type": "array", "items": {"$ref": "#/$defs/card"}},
+        "C": {"type": "array", "items": {"$ref": "#/$defs/card"}}
+      }
+    },
+    "exclusions": {"type": "array", "items": {"$ref": "#/$defs/exclusion"}},
+    "formal_hashes_before": {"$ref": "#/$defs/hashMap"},
+    "formal_hashes_after": {"$ref": "#/$defs/hashMap"}
+  },
+  "$defs": {
+    "hashMap": {
+      "type": "object",
+      "additionalProperties": {"type": "string", "pattern": "^[a-f0-9]{64}$"}
+    },
+    "card": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "item",
+        "candidate_type",
+        "meaning",
+        "source_sentence",
+        "article_source_hash",
+        "sentence_hash",
+        "source_event_id",
+        "bank_status"
+      ],
+      "properties": {
+        "item": {"type": "string"},
+        "candidate_type": {"type": "string"},
+        "meaning": {"type": "string"},
+        "usage": {"type": "string"},
+        "review_note": {"type": "string"},
+        "source_sentence": {"type": "string"},
+        "source_translation": {"type": "string"},
+        "article_source_hash": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+        "sentence_hash": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+        "source_event_id": {"type": "string"},
+        "bank_status": {"enum": ["new_candidate", "existing_bank", "duplicate_like"]},
+        "bank_match_ids": {"type": "array", "items": {"type": "string"}},
+        "user_evidence": {"type": "array", "items": {"type": "string"}},
+        "classification_reason": {"type": "string"}
+      }
+    },
+    "exclusion": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["item", "status", "reason"],
+      "properties": {
+        "item": {"type": "string"},
+        "status": {"enum": ["mastered_excluded", "duplicate_candidate", "article_only", "not_recommended"]},
+        "reason": {"type": "string"},
+        "source_event_id": {"type": "string"}
+      }
+    }
+  }
+}

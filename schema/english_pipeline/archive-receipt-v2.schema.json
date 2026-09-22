@@ -1,0 +1,64 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://local.kaoyan-english/schema/english_pipeline/archive-receipt-v2.schema.json",
+  "title": "Verified T9 English package archive receipt v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "status", "batch_id", "manifest_sha256", "writer_receipt_path", "writer_receipt_sha256", "archive_intent_path", "archive_intent_sha256", "archive_root", "volume_name", "volume_uuid", "sentinel_sha256", "subject_relative_root", "package_results", "retained_package_ids", "display_closures", "verified_at", "formal_write_count", "local_cleanup_authorized", "receipt_id"],
+  "properties": {
+    "schema_version": {"const": "english_package_archive_receipt_v2"},
+    "status": {"const": "PASS"},
+    "batch_id": {"type": "string", "pattern": "^EN-BATCH-[0-9]{8}-[A-F0-9]{12}$"},
+    "manifest_sha256": {"$ref": "#/$defs/sha256"},
+    "writer_receipt_path": {"type": "string"},
+    "writer_receipt_sha256": {"$ref": "#/$defs/sha256"},
+    "archive_intent_path": {"type": "string"},
+    "archive_intent_sha256": {"$ref": "#/$defs/sha256"},
+    "archive_root": {"const": "/Volumes/T9-Data"},
+    "volume_name": {"const": "T9-Data"},
+    "volume_uuid": {"const": "00000000-0000-0000-0000-000000000000"},
+    "sentinel_sha256": {"const": "f086b32b29b2b38f1a28dffb8fde4fa850078332d8a23ae269cc8e857a6bd2ca"},
+    "subject_relative_root": {"const": "02_英语/资料库/原始会话资料"},
+    "package_results": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/package_result"}
+    },
+    "retained_package_ids": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"type": "string"}
+    },
+    "display_closures": {"type": "array", "items": {"type": "object"}},
+    "sentence_support_status": {"enum": ["closed", "legacy_support_not_required"]},
+    "sentence_support_refresh": {"type": ["object", "null"]},
+    "sentence_support_closures": {"type": "array", "items": {"type": "object"}},
+    "verified_at": {"type": "string", "format": "date-time"},
+    "formal_write_count": {"const": 0},
+    "local_cleanup_authorized": {"const": true},
+    "receipt_id": {"type": "string", "pattern": "^EN-ARCHIVE-[A-F0-9]{16}$"}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "package_result": {
+      "type": "object",
+      "required": ["package_id", "package_sha256", "archive_root", "archive_relative_path", "archive_manifest_sha256", "locator_path", "locator_sha256", "formal_ids", "retrieval_keys", "display_asset_closure", "terminal_outcomes", "verification", "local_path"],
+      "properties": {
+        "package_id": {"type": "string"},
+        "package_sha256": {"$ref": "#/$defs/sha256"},
+        "archive_root": {"const": "/Volumes/T9-Data"},
+        "archive_relative_path": {"type": "string"},
+        "archive_manifest_sha256": {"$ref": "#/$defs/sha256"},
+        "locator_path": {"type": "string"},
+        "locator_sha256": {"$ref": "#/$defs/sha256"},
+        "formal_ids": {"type": "array", "items": {"type": "string"}},
+        "retrieval_keys": {"type": "array", "uniqueItems": true, "items": {"type": "string"}},
+        "display_asset_closure": {"type": "object"},
+        "sentence_support_status": {"enum": ["closed", "legacy_support_not_required"]},
+        "sentence_support_closure": {"type": ["object", "null"]},
+        "terminal_outcomes": {"type": "array", "items": {"type": "string"}},
+        "verification": {"const": "PASS"},
+        "local_path": {"type": "string"}
+      }
+    }
+  }
+}

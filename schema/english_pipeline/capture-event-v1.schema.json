@@ -1,0 +1,92 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://local.kaoyan-english/schema/english_pipeline/capture-event-v1.schema.json",
+  "title": "English pipeline immutable capture event v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "event_id", "event_type", "idempotency_key", "request_sha256", "occurred_at", "article", "producer", "formal_write_count", "formal_writeback"],
+  "properties": {
+    "schema_version": {"const": "english_capture_event_v1"},
+    "event_id": {"type": "string", "pattern": "^EVT-[0-9]{8}-[A-F0-9]{16}$"},
+    "event_type": {"enum": ["sentence_captured", "sentence_correction", "article_completed"]},
+    "idempotency_key": {"type": "string", "minLength": 1, "maxLength": 240},
+    "request_sha256": {"$ref": "#/$defs/sha256"},
+    "occurred_at": {"type": "string", "format": "date-time"},
+    "article": {"$ref": "#/$defs/article"},
+    "source": {"$ref": "#/$defs/source"},
+    "learning": {"$ref": "#/$defs/learning"},
+    "candidates": {"type": "array", "items": {"$ref": "#/$defs/candidate"}},
+    "supersedes_event_id": {"type": "string", "pattern": "^EVT-[0-9]{8}-[A-F0-9]{16}$"},
+    "correction_reason": {"type": "string", "minLength": 1},
+    "completion": {"$ref": "#/$defs/completion"},
+    "producer": {"$ref": "#/$defs/producer"},
+    "formal_write_count": {"const": 0},
+    "formal_writeback": {"const": "none"}
+  },
+  "allOf": [
+    {"if": {"properties": {"event_type": {"enum": ["sentence_captured", "sentence_correction"]}}}, "then": {"required": ["source", "learning", "candidates"]}},
+    {"if": {"properties": {"event_type": {"const": "sentence_correction"}}}, "then": {"required": ["supersedes_event_id", "correction_reason"]}},
+    {"if": {"properties": {"event_type": {"const": "article_completed"}}}, "then": {"required": ["completion"]}}
+  ],
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "article": {
+      "type": "object", "additionalProperties": false,
+      "required": ["article_id", "source_id", "source_article", "source_hash"],
+      "properties": {
+        "article_id": {"type": "string", "minLength": 1}, "source_id": {"type": "string", "minLength": 1},
+        "source_article": {"type": "string", "minLength": 1}, "source_hash": {"$ref": "#/$defs/sha256"},
+        "reference_id": {"type": "string"}, "title": {"type": "string"}
+      }
+    },
+    "source": {
+      "type": "object", "additionalProperties": false,
+      "required": ["sentence_id", "source_sentence", "sentence_hash", "source_kind"],
+      "properties": {
+        "sentence_id": {"type": "string", "minLength": 1}, "source_sentence": {"type": "string", "minLength": 1},
+        "sentence_hash": {"$ref": "#/$defs/sha256"},
+        "source_kind": {"enum": ["article", "question", "option", "explanation", "user_provided"]}
+      }
+    },
+    "learning": {
+      "type": "object", "additionalProperties": false,
+      "required": ["first_translation", "user_evidence_verbatim", "evidence_states", "evidence_origin", "user_evidence", "answer_protection", "hint_level"],
+      "properties": {
+        "first_translation": {"type": ["string", "null"]},
+        "user_evidence_verbatim": {"type": ["string", "null"]},
+        "evidence_states": {"type": "array", "uniqueItems": true, "items": {"enum": ["unknown_observed", "guided_understood", "independent_correct_use"]}},
+        "evidence_origin": {"enum": ["live_user", "synthetic_fixture"]},
+        "user_evidence": {"type": "array", "uniqueItems": true, "items": {"enum": ["unknown", "mistranslated", "missed", "familiar_new_meaning", "structure_trap", "question_logic", "direct_explanation", "other"]}},
+        "answer_protection": {"enum": ["practice_safe", "unlocked", "not_applicable"]},
+        "hint_level": {"type": "integer", "minimum": 0, "maximum": 5},
+        "translation": {"type": "string"}, "explanation": {"type": "string"},
+        "first_breakpoint": {"type": "string"}, "restatement": {"type": "string"}
+      }
+    },
+    "candidate": {
+      "type": "object", "additionalProperties": false,
+      "required": ["item", "candidate_type", "meaning", "decision"],
+      "properties": {
+        "item": {"type": "string", "minLength": 1},
+        "candidate_type": {"enum": ["单词", "词组", "熟词僻义", "句型", "长难句", "写作表达"]},
+        "meaning": {"type": "string"}, "usage": {"type": "string"}, "review_note": {"type": "string"},
+        "decision": {"enum": ["long_term_candidate", "bbdc_candidate", "article_only", "not_recommended"]},
+        "tier_hint": {"enum": ["A", "B", "C", "article_only"]}, "reason": {"type": "string"}
+      }
+    },
+    "completion": {
+      "type": "object", "additionalProperties": false,
+      "required": ["study_date", "effective_capture_event_ids", "capture_event_sha256"],
+      "properties": {
+        "study_date": {"type": "string", "format": "date"},
+        "effective_capture_event_ids": {"type": "array", "uniqueItems": true, "items": {"type": "string"}},
+        "capture_event_sha256": {"type": "object", "additionalProperties": {"$ref": "#/$defs/sha256"}}
+      }
+    },
+    "producer": {
+      "type": "object", "additionalProperties": false,
+      "required": ["role", "name", "version"],
+      "properties": {"role": {"const": "foreground_producer"}, "name": {"type": "string"}, "version": {"type": "string"}}
+    }
+  }
+}

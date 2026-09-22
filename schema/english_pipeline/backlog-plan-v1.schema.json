@@ -1,0 +1,163 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://local.kaoyan-english/schema/english_pipeline/backlog-plan-v1.schema.json",
+  "title": "Canonical English package backlog plan through cutoff v1",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "cutoff_date",
+    "timezone",
+    "selection",
+    "daily_batches",
+    "packages",
+    "future_excluded",
+    "legacy_reachability_audit",
+    "formal_write_count",
+    "background_processing",
+    "plan_id",
+    "plan_canonical_sha256",
+    "created_at"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "english_package_backlog_plan_v1"
+    },
+    "status": {
+      "enum": [
+        "READY",
+        "NOOP"
+      ]
+    },
+    "cutoff_date": {
+      "type": "string",
+      "format": "date"
+    },
+    "timezone": {
+      "const": "Asia/Shanghai"
+    },
+    "selection": {
+      "type": "object",
+      "required": [
+        "mode",
+        "only_today",
+        "package_ids"
+      ],
+      "properties": {
+        "mode": {
+          "enum": [
+            "through_cutoff",
+            "only_today",
+            "package_subset"
+          ]
+        },
+        "only_today": {
+          "type": "boolean"
+        },
+        "package_ids": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "daily_batches": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
+    "packages": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/package"
+      }
+    },
+    "future_excluded": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
+    "legacy_reachability_audit": {
+      "type": [
+        "object",
+        "null"
+      ]
+    },
+    "formal_write_count": {
+      "const": 0
+    },
+    "background_processing": {
+      "const": "none"
+    },
+    "plan_id": {
+      "type": "string",
+      "pattern": "^EN-BACKLOG-[0-9]{8}-[A-F0-9]{16}$"
+    },
+    "plan_canonical_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "waiting_web_review": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    }
+  },
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "package": {
+      "type": "object",
+      "required": [
+        "package_id",
+        "study_date",
+        "status",
+        "reason"
+      ],
+      "properties": {
+        "package_id": {
+          "type": "string"
+        },
+        "study_date": {
+          "type": "string",
+          "format": "date"
+        },
+        "status": {
+          "enum": [
+            "pending",
+            "needs_user",
+            "failed",
+            "archive_pending",
+            "recovery_required",
+            "already_consumed"
+          ]
+        },
+        "reason": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "pending_component": {
+          "enum": [
+            "support_refresh",
+            "display_assets",
+            "locator",
+            "archive",
+            "cleanup",
+            null
+          ]
+        }
+      }
+    }
+  }
+}

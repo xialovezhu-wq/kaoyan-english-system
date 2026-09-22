@@ -1,0 +1,4 @@
+interface:
+  display_name: "考研英语阅读材料与会话封存"
+  short_description: "保存原文、题目和全部对话附件，校验当前来源并保护未解锁答案"
+  default_prompt: "Use $kaoyan-english-reading-intake to resolve the current source and preserve the complete immutable conversation package with explicit answer exposure and bounded local capture, without formal or background-model writes."

@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://local.kaoyan-english/schema/english_pipeline/package-receipt-v2.schema.json",
+  "title": "English conversation package receipt v2 with segment continuation gate",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "receipt_id", "package_id", "package_sha256",
+    "manifest_sha256", "segment_key", "request_sha256", "thread_ref_sha256",
+    "captured_at", "previous_token_sha256", "continuation_token", "token_sha256",
+    "segment_gate_status", "status", "replayed", "study_date", "missing_fields",
+    "formal_write_count", "background_processing", "package_path"
+  ],
+  "properties": {
+    "schema_version": {"const": "english_package_receipt_v2"},
+    "receipt_id": {"type": "string"},
+    "package_id": {"type": "string"},
+    "package_sha256": {"$ref": "#/$defs/sha256"},
+    "manifest_sha256": {"$ref": "#/$defs/sha256"},
+    "segment_key": {"type": "string", "minLength": 1},
+    "request_sha256": {"$ref": "#/$defs/sha256"},
+    "thread_ref_sha256": {"$ref": "#/$defs/sha256"},
+    "captured_at": {"type": "string", "format": "date-time"},
+    "previous_token_sha256": {"oneOf": [{"$ref": "#/$defs/sha256"}, {"type": "null"}]},
+    "continuation_token": {"$ref": "#/$defs/token"},
+    "token_sha256": {"$ref": "#/$defs/sha256"},
+    "segment_gate_status": {"enum": ["package_sealed", "ready"]},
+    "status": {"enum": ["created", "idempotent_noop"]},
+    "replayed": {"type": "boolean"},
+    "study_date": {"type": "string", "format": "date"},
+    "missing_fields": {"type": "array", "items": {"type": "string"}},
+    "formal_write_count": {"const": 0},
+    "background_processing": {"const": "none"},
+    "package_path": {"type": "string"},
+    "frontier_path": {"type": "string"},
+    "current_projection_path": {"type": "string"}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "token": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version", "package_id", "package_sha256", "manifest_sha256",
+        "segment_key", "captured_at", "thread_ref_sha256", "previous_token_sha256"
+      ],
+      "properties": {
+        "schema_version": {"const": "english_segment_continuation_token_v1"},
+        "package_id": {"type": "string"},
+        "package_sha256": {"$ref": "#/$defs/sha256"},
+        "manifest_sha256": {"$ref": "#/$defs/sha256"},
+        "segment_key": {"type": "string", "minLength": 1},
+        "captured_at": {"type": "string", "format": "date-time"},
+        "thread_ref_sha256": {"$ref": "#/$defs/sha256"},
+        "previous_token_sha256": {"oneOf": [{"$ref": "#/$defs/sha256"}, {"type": "null"}]}
+      }
+    }
+  }
+}

@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://local.kaoyan-english/schema/english_pipeline/nightly-manifest-v2.schema.json",
+  "title": "Immutable package-backed English nightly manifest v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "batch_id", "study_date", "frozen_at", "package_documents", "package_ids", "package_sha256s", "source_snapshot", "review_status_proposals", "review_status_proposals_sha256", "review_status_source_hashes", "formal_snapshot", "authorization", "status"],
+  "properties": {
+    "schema_version": {"const": "english_nightly_manifest_v2"},
+    "batch_id": {"type": "string", "pattern": "^EN-BATCH-[0-9]{8}-[A-F0-9]{12}$"},
+    "study_date": {"type": "string", "format": "date"},
+    "frozen_at": {"type": "string", "format": "date-time"},
+    "package_documents": {"type": "array", "items": {"$ref": "#/$defs/packageDocument"}},
+    "package_ids": {"type": "array", "uniqueItems": true, "items": {"type": "string"}},
+    "package_sha256s": {"type": "array", "uniqueItems": true, "items": {"$ref": "#/$defs/sha256"}},
+    "source_snapshot": {"type": "object"},
+    "review_status_proposals": {"type": "object"},
+    "review_status_proposals_sha256": {"$ref": "#/$defs/sha256"},
+    "review_status_source_hashes": {"type": "object", "additionalProperties": {"$ref": "#/$defs/sha256"}},
+    "formal_snapshot": {"type": "object"},
+    "authorization": {"type": "object"},
+    "status": {"enum": ["frozen", "NOOP"]}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "packageDocument": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["package_id", "path", "package_sha256", "manifest_sha256", "conversation_sha256", "source_sha256", "missing_fields"],
+      "properties": {
+        "package_id": {"type": "string"},
+        "path": {"type": "string"},
+        "package_sha256": {"$ref": "#/$defs/sha256"},
+        "manifest_sha256": {"$ref": "#/$defs/sha256"},
+        "conversation_sha256": {"$ref": "#/$defs/sha256"},
+        "source_sha256": {"$ref": "#/$defs/sha256"},
+        "missing_fields": {"type": "array", "items": {"type": "string"}}
+      }
+    }
+  }
+}

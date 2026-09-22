@@ -1,0 +1,76 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://local.kaoyan-english/schema/english_pipeline/legacy-event-retirement-v1.schema.json",
+  "title": "Immutable explicit legacy capture event retirement receipt v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "retirement_id",
+    "disposition",
+    "authority",
+    "events",
+    "event_count",
+    "package_write_count",
+    "formal_write_count",
+    "migration_performed",
+    "background_processing",
+    "retirement_sha256",
+    "created_at"
+  ],
+  "properties": {
+    "schema_version": {"const": "english_legacy_event_retirement_v1"},
+    "retirement_id": {
+      "type": "string",
+      "pattern": "^EN-LEGACY-RETIRE-[a-f0-9]{64}$"
+    },
+    "disposition": {"const": "user_removed"},
+    "authority": {"const": "explicit_user_request"},
+    "events": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"$ref": "#/$defs/event_binding"}
+    },
+    "event_count": {"type": "integer", "minimum": 1},
+    "package_write_count": {"const": 0},
+    "formal_write_count": {"const": 0},
+    "migration_performed": {"const": false},
+    "background_processing": {"const": "none"},
+    "retirement_sha256": {"$ref": "#/$defs/sha256"},
+    "created_at": {"type": "string", "format": "date-time"}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "event_binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "event_id",
+        "study_date",
+        "event_path",
+        "event_object_sha256",
+        "event_file_sha256",
+        "capture_receipt_path",
+        "capture_receipt_sha256"
+      ],
+      "properties": {
+        "event_id": {
+          "type": "string",
+          "pattern": "^EVT-[0-9]{8}-[A-F0-9]{16}$"
+        },
+        "study_date": {"type": "string", "format": "date"},
+        "event_path": {
+          "type": "string",
+          "pattern": "^events/[0-9]{4}-[0-9]{2}-[0-9]{2}/EVT-[0-9]{8}-[A-F0-9]{16}\\.json$"
+        },
+        "event_object_sha256": {"$ref": "#/$defs/sha256"},
+        "event_file_sha256": {"$ref": "#/$defs/sha256"},
+        "capture_receipt_path": {
+          "type": "string",
+          "pattern": "^receipts/capture/[0-9]{4}-[0-9]{2}-[0-9]{2}/CAPTURE-[0-9]{8}-[A-F0-9]{16}\\.json$"
+        },
+        "capture_receipt_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    }
+  }
+}

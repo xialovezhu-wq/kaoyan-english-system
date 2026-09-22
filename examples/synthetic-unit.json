@@ -1,0 +1,30 @@
+{
+  "example_only": true,
+  "schema": "public-learning-flow-example-v1",
+  "subject": "english",
+  "unit_id": "SYNTHETIC-UNIT-001",
+  "source": {
+    "kind": "synthetic",
+    "text": "这是公开仓库专用的合成结构示例。"
+  },
+  "conversation": [
+    {
+      "role": "user",
+      "text": "合成作答占位，不代表任何人的表现。"
+    },
+    {
+      "role": "assistant",
+      "text": "合成反馈占位，不形成掌握判断。"
+    }
+  ],
+  "capture": {
+    "sealed": false,
+    "formal_write_count": 0,
+    "personal_summary_write_count": 0
+  },
+  "formal_intake": {
+    "status": "not_requested",
+    "score": null,
+    "requires_authorized_real_evidence": true
+  }
+}

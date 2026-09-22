@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://local.kaoyan-english/schema/english_pipeline/archive-reopen-receipt-v1.schema.json",
+  "title": "Exact English raw archive reopen receipt v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "status", "package_id", "package_sha256", "manifest_sha256", "locator_path", "locator_sha256", "archive_relative_path", "selected_messages", "selected_attachments", "whole_volume_scanned", "formal_write_count"],
+  "properties": {
+    "schema_version": {"const": "english_archive_reopen_receipt_v1"},
+    "status": {"const": "PASS"},
+    "package_id": {"type": "string"},
+    "package_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "manifest_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "locator_path": {"type": "string"},
+    "locator_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "archive_relative_path": {"type": "string"},
+    "selected_messages": {"type": "array"},
+    "selected_attachments": {"type": "array"},
+    "whole_volume_scanned": {"const": false},
+    "formal_write_count": {"const": 0}
+  }
+}
+

@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://local.kaoyan-english/schema/english_pipeline/sentence-support-index-v1.schema.json",
+  "title": "Atomic current English sentence-support index v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "status", "entry_count", "source_count", "generation_id", "generation_path", "generation_tree_sha256", "generation_chain", "last_refresh", "generated_at"],
+  "properties": {
+    "schema_version": {"const": "english_sentence_support_index_v1"},
+    "status": {"const": "READY"},
+    "entry_count": {"type": "integer", "minimum": 0},
+    "source_count": {"type": "integer", "minimum": 0},
+    "generation_id": {"type": ["string", "null"]},
+    "generation_path": {"type": ["string", "null"]},
+    "generation_tree_sha256": {"type": ["string", "null"], "pattern": "^[a-f0-9]{64}$"},
+    "generation_chain": {
+      "type": "array",
+      "maxItems": 16,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["generation_id", "generation_path", "generation_tree_sha256"],
+        "properties": {
+          "generation_id": {"type": "string"},
+          "generation_path": {"type": "string"},
+          "generation_tree_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"}
+        }
+      }
+    },
+    "last_refresh": {"type": ["object", "null"]},
+    "generated_at": {"type": ["string", "null"], "format": "date-time"}
+  }
+}

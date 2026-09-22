@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://local.kaoyan-english/schema/english_pipeline/sentence-support-preflight-receipt-v1.schema.json",
+  "title": "Durable pre-apply English sentence-support preflight receipt v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "status", "batch_id", "study_date", "manifest_path", "manifest_sha256", "dry_run_receipt_path", "dry_run_receipt_sha256", "actions_sha256", "proposal_input_sha256", "proposal_path", "proposal_sha256", "action_set_id", "expected_completed_package_ids", "expected_index_sha256", "record_count", "projected_records", "formal_write_count", "background_processing", "preflight_at", "receipt_id"],
+  "properties": {
+    "schema_version": {"const": "english_sentence_support_preflight_receipt_v1"},
+    "status": {"const": "PASS"},
+    "batch_id": {"type": "string"},
+    "study_date": {"type": "string", "format": "date"},
+    "manifest_path": {"type": "string"},
+    "manifest_sha256": {"$ref": "#/$defs/sha256"},
+    "dry_run_receipt_path": {"type": "string"},
+    "dry_run_receipt_sha256": {"$ref": "#/$defs/sha256"},
+    "actions_sha256": {"$ref": "#/$defs/sha256"},
+    "proposal_input_sha256": {"$ref": "#/$defs/sha256"},
+    "proposal_path": {"type": "string"},
+    "proposal_sha256": {"$ref": "#/$defs/sha256"},
+    "action_set_id": {"type": "string"},
+    "expected_completed_package_ids": {"type": "array", "uniqueItems": true, "items": {"type": "string"}},
+    "expected_index_sha256": {"oneOf": [{"$ref": "#/$defs/sha256"}, {"type": "null"}]},
+    "record_count": {"type": "integer", "minimum": 0},
+    "projected_records": {"type": "array", "items": {"type": "object"}},
+    "formal_write_count": {"const": 0},
+    "background_processing": {"const": "none"},
+    "preflight_at": {"type": "string", "format": "date-time"},
+    "receipt_id": {"type": "string", "pattern": "^EN-SUPPORT-PREFLIGHT-[A-F0-9]{16}$"}
+  },
+  "$defs": {"sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"}}
+}

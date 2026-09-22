@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://local.kaoyan-english/schema/english_pipeline/apply-receipt-v1.schema.json",
+  "title": "Deterministic nightly writer receipt v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "receipt_id", "batch_id", "action_set_id", "mode", "status", "started_at", "completed_at", "authorization", "manifest_sha256", "actions_sha256", "lock_path", "journal_path", "formal_prehashes", "proposed_posthashes", "formal_posthashes", "formal_files_changed", "formal_write_count", "action_results", "validation"],
+  "properties": {
+    "schema_version": {"const": "english_apply_receipt_v1"}, "receipt_id": {"type": "string"}, "batch_id": {"type": "string"}, "action_set_id": {"type": "string"},
+    "mode": {"enum": ["dry_run", "apply"]},
+    "status": {"enum": ["DRY_RUN_VALID", "DRY_RUN_PARTIAL", "DRY_RUN_NO_ACTION", "APPLIED", "PARTIAL", "NO_ACTION", "FAILED", "CAS_CONFLICT", "RECOVERED_ROLLBACK", "RECOVERED_COMMIT"]},
+    "started_at": {"type": "string", "format": "date-time"}, "completed_at": {"type": "string", "format": "date-time"},
+    "authorization": {"type": ["object", "null"]}, "manifest_sha256": {"$ref": "#/$defs/sha256"}, "actions_sha256": {"$ref": "#/$defs/sha256"},
+    "package_ids": {"type": "array", "uniqueItems": true, "items": {"type": "string"}},
+    "package_sha256s": {"type": "array", "uniqueItems": true, "items": {"$ref": "#/$defs/sha256"}},
+    "lock_path": {"type": "string"}, "journal_path": {"type": "string"},
+    "formal_prehashes": {"$ref": "#/$defs/hashMap"}, "proposed_posthashes": {"$ref": "#/$defs/hashMap"}, "formal_posthashes": {"$ref": "#/$defs/hashMap"},
+    "formal_files_changed": {"type": "boolean"}, "formal_write_count": {"type": "integer", "minimum": 0},
+    "archive_status": {"enum": ["not_started", "pending"]},
+    "workflow_status": {"type": "string"},
+    "support_preflight_receipt_id": {"type": "string"},
+    "support_preflight_receipt_path": {"type": "string"},
+    "support_preflight_receipt_sha256": {"$ref": "#/$defs/sha256"},
+    "support_proposal_sha256": {"$ref": "#/$defs/sha256"},
+    "action_results": {"type": "array", "items": {"$ref": "#/$defs/actionResult"}},
+    "package_dispositions": {"type": "object", "additionalProperties": {"enum": ["completed", "needs_user", "incomplete"]}},
+    "validation": {"type": "object"}, "error": {"type": "string"}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "hashMap": {"type": "object", "additionalProperties": {"$ref": "#/$defs/sha256"}},
+    "actionResult": {
+      "type": "object", "additionalProperties": false, "required": ["action_id", "action_type", "target", "result", "message"],
+      "properties": {
+        "action_id": {"type": "string"}, "action_type": {"enum": ["master_bank_insert", "master_bank_update", "mastered_insert", "sentence_pattern_append", "sentence_pattern_merge", "skip_duplicate", "needs_user"]},
+        "target": {"type": "string"}, "result": {"enum": ["would_apply", "applied", "skipped", "needs_user", "failed"]},
+        "message": {"type": "string"}, "assigned_id": {"type": "string"},
+        "evidence_refs": {"type": "array", "items": {"type": "object"}},
+        "resolved_evidence": {"type": "array", "items": {"type": "object"}}
+      }
+    }
+  }
+}

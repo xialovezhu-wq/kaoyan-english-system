@@ -1,0 +1,90 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://local.kaoyan-english/schema/english_pipeline/luna-candidate-v1.schema.json",
+  "title": "Luna formal-entry candidate v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "candidate_id", "study_date", "source_id", "article_id", "article_source_hash", "created_at", "producer", "runtime_identity", "capture_event_ids", "capture_event_sha256", "formal_write_count", "formal_writeback", "validation", "items"],
+  "properties": {
+    "schema_version": {"const": "english_luna_candidate_v1"}, "candidate_id": {"type": "string", "minLength": 1},
+    "study_date": {"type": "string", "format": "date"}, "source_id": {"type": "string", "minLength": 1}, "article_id": {"type": "string", "minLength": 1},
+    "article_source_hash": {"$ref": "#/$defs/sha256"}, "created_at": {"type": "string", "format": "date-time"},
+    "producer": {"type": "object", "additionalProperties": false, "required": ["role", "model", "prompt_version"], "properties": {"role": {"const": "luna_candidate_consumer"}, "model": {"type": "string"}, "prompt_version": {"type": "string"}}},
+    "runtime_identity": {"$ref": "#/$defs/runtimeIdentity"},
+    "capture_event_ids": {"type": "array", "uniqueItems": true, "items": {"type": "string"}},
+    "capture_event_sha256": {"type": "object", "additionalProperties": {"$ref": "#/$defs/sha256"}},
+    "formal_write_count": {"const": 0}, "formal_writeback": {"const": "none"},
+    "validation": {"$ref": "#/$defs/validation"},
+    "items": {"type": "array", "items": {"$ref": "#/$defs/item"}}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "runtimeIdentity": {
+      "type": "object", "additionalProperties": false, "required": ["requested", "observed", "provenance", "status"],
+      "properties": {
+        "requested": {"$ref": "#/$defs/runtimeSide"}, "observed": {"$ref": "#/$defs/runtimeSide"},
+        "provenance": {"type": "object", "additionalProperties": false, "required": ["source", "reference", "observed_at"], "properties": {"source": {"enum": ["runtime_attestation", "process_metadata", "request_only", "none"]}, "reference": {"type": ["string", "null"]}, "observed_at": {"type": ["string", "null"]}}},
+        "status": {"enum": ["confirmed", "requested_unverified", "mismatch", "unavailable"]}
+      },
+      "allOf": [
+        {"if": {"properties": {"status": {"const": "confirmed"}}}, "then": {"properties": {"provenance": {"properties": {"source": {"enum": ["runtime_attestation", "process_metadata"]}, "reference": {"type": "string", "minLength": 1}}}}}},
+        {"if": {"properties": {"status": {"const": "requested_unverified"}}}, "then": {"properties": {"provenance": {"properties": {"source": {"const": "request_only"}}}}}},
+        {"if": {"properties": {"status": {"const": "unavailable"}}}, "then": {"properties": {"provenance": {"properties": {"source": {"const": "none"}}}}}}
+      ]
+    },
+    "runtimeSide": {
+      "type": "object", "additionalProperties": true, "required": ["model", "reasoning_effort"],
+      "properties": {"model": {"type": "string", "minLength": 1}, "reasoning_effort": {"type": "string", "minLength": 1}}
+    },
+    "validation": {
+      "type": "object", "additionalProperties": false, "required": ["status", "blockers"],
+      "properties": {"status": {"enum": ["PASS", "BLOCKED"]}, "blockers": {"type": "array", "items": {"type": "string"}}}
+    },
+    "item": {
+      "type": "object", "additionalProperties": false,
+      "required": ["item_id", "sequence", "item", "candidate_type", "candidate_status", "tier", "source_event_id", "source_article", "source_kind", "source_sentence", "article_source_hash", "sentence_hash", "evidence_states", "evidence_origin", "user_evidence", "bank_status", "mastered_status", "grounding", "card"],
+      "properties": {
+        "item_id": {"type": "string"}, "sequence": {"type": "integer", "minimum": 1}, "item": {"type": "string", "minLength": 1},
+        "candidate_type": {"enum": ["单词", "词组", "熟词僻义", "句型", "长难句", "写作表达"]}, "candidate_status": {"enum": ["familiarity_candidate", "mastery_candidate"]},
+        "tier": {"enum": ["A", "B", "C", "article_only"]}, "source_event_id": {"type": "string"},
+        "source_article": {"type": "string"}, "source_kind": {"enum": ["article", "question", "option", "user_provided"]}, "source_sentence": {"type": "string", "minLength": 1},
+        "article_source_hash": {"$ref": "#/$defs/sha256"}, "sentence_hash": {"$ref": "#/$defs/sha256"},
+        "evidence_states": {"type": "array", "uniqueItems": true, "items": {"enum": ["unknown_observed", "guided_understood", "independent_correct_use"]}},
+        "evidence_origin": {"enum": ["live_user", "synthetic_fixture"]},
+        "user_evidence": {"type": "array", "items": {"type": "string"}},
+        "bank_status": {"enum": ["new_candidate", "existing_bank", "duplicate_like", "needs_check"]},
+        "bank_match_ids": {"type": "array", "items": {"type": "string"}},
+        "mastered_status": {"enum": ["clear", "mastered_excluded", "mastery_proposed"]},
+        "mastery_proposal": {"$ref": "#/$defs/masteryProposal"},
+        "grounding": {"$ref": "#/$defs/grounding"}, "card": {"$ref": "#/$defs/card"}
+      },
+      "allOf": [
+        {"if": {"properties": {"mastered_status": {"const": "mastery_proposed"}}}, "then": {"required": ["mastery_proposal"]}, "else": {"not": {"required": ["mastery_proposal"]}}}
+      ]
+    },
+    "masteryProposal": {
+      "type": "object", "additionalProperties": false,
+      "required": ["evidence_kind", "evidence_sentence", "evidence_context", "proof_note"],
+      "properties": {"evidence_kind": {"const": "independent_correct_use"}, "evidence_sentence": {"type": "string", "minLength": 1}, "evidence_context": {"type": "string", "minLength": 1}, "proof_note": {"type": "string", "minLength": 1}}
+    },
+    "grounding": {
+      "type": "object", "additionalProperties": false,
+      "required": ["status", "user_evidence_ref", "writing_pattern", "writing_vocabulary", "syllabus_occurrence", "sentence_pattern", "old_word_sources", "naturalness_check"],
+      "properties": {
+        "status": {"enum": ["passed", "needs_context", "needs_user_evidence", "needs_reference_graph", "reference_gap", "not_requested"]},
+        "user_evidence_ref": {"type": "string"}, "writing_pattern": {"type": "object"}, "writing_vocabulary": {"type": "object"},
+        "syllabus_occurrence": {"type": "object"}, "sentence_pattern": {"type": "object"},
+        "old_word_sources": {"type": "array", "items": {"type": "object"}}, "naturalness_check": {"type": "string"}
+      }
+    },
+    "card": {
+      "type": "object", "additionalProperties": false,
+      "required": ["meaning", "source_translation", "usage", "review_note"],
+      "properties": {
+        "meaning": {"type": "string"}, "source_translation": {"type": "string"}, "usage": {"type": "string"}, "review_note": {"type": "string"},
+        "adopted_pattern": {"type": "string"}, "old_word_example": {"type": "string"}, "example_translation": {"type": "string"},
+        "structure_breakdown": {"type": "string"}, "review_old_words": {"type": "array", "items": {"type": "string"}}
+      }
+    }
+  }
+}

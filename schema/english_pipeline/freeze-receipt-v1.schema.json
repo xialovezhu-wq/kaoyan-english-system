@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://local.kaoyan-english/schema/english_pipeline/freeze-receipt-v1.schema.json",
+  "title": "Package-backed English nightly freeze receipt v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "status",
+    "batch_id",
+    "study_date",
+    "manifest",
+    "package_count",
+    "package_ids",
+    "package_sha256s",
+    "formal_write_count",
+    "formal_writeback"
+  ],
+  "properties": {
+    "schema_version": {"const": "english_freeze_receipt_v1"},
+    "status": {"enum": ["frozen", "NOOP"]},
+    "batch_id": {"type": "string"},
+    "study_date": {"type": "string", "format": "date"},
+    "manifest": {"type": "string"},
+    "package_count": {"type": "integer", "minimum": 0},
+    "package_ids": {"type": "array", "uniqueItems": true, "items": {"type": "string"}},
+    "package_sha256s": {"type": "array", "uniqueItems": true, "items": {"type": "string", "pattern": "^[a-f0-9]{64}$"}},
+    "formal_write_count": {"const": 0},
+    "formal_writeback": {"const": "none"}
+  }
+}
+

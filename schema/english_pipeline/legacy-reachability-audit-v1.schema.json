@@ -1,0 +1,34 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://local.kaoyan-english/schema/english_pipeline/legacy-reachability-audit-v1.schema.json",
+  "title": "Read-only legacy capture event package reachability audit v1",
+  "type": "object",
+  "required": [
+    "schema_version", "cutoff_date", "event_count", "counts", "events",
+    "migration_performed", "formal_write_count", "background_processing", "audit_sha256"
+  ],
+  "properties": {
+    "schema_version": {"const": "english_legacy_capture_reachability_audit_v1"},
+    "cutoff_date": {"type": "string", "format": "date"},
+    "event_count": {"type": "integer", "minimum": 0},
+    "counts": {"type": "object"},
+    "events": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["event_id", "study_date", "status", "reason", "migration_performed"],
+        "properties": {
+          "event_id": {"type": "string"},
+          "study_date": {"type": "string", "format": "date"},
+          "status": {"enum": ["eligible-for-explicit-migration", "needs_user"]},
+          "reason": {"type": "string"},
+          "migration_performed": {"const": false}
+        }
+      }
+    },
+    "migration_performed": {"const": false},
+    "formal_write_count": {"const": 0},
+    "background_processing": {"const": "none"},
+    "audit_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"}
+  }
+}

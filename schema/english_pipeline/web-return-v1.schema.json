@@ -1,0 +1,62 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "english_web_return_v1",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "contract_version",
+    "subject",
+    "bundle_id",
+    "files",
+    "source_commit",
+    "input_zip_sha256"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "english_web_return_v1"
+    },
+    "contract_version": {
+      "const": "english-web-review-v1"
+    },
+    "subject": {
+      "const": "english"
+    },
+    "bundle_id": {
+      "type": "string",
+      "pattern": "^EN-BUNDLE-[A-F0-9]{24}$"
+    },
+    "files": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "path",
+          "size",
+          "sha256"
+        ],
+        "properties": {
+          "path": {
+            "type": "string"
+          },
+          "size": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "sha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "source_commit": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{40}([a-f0-9]{24})?$"
+    },
+    "input_zip_sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    }
+  }
+}

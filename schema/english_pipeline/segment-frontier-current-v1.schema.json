@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://local.kaoyan-english/schema/english_pipeline/segment-frontier-current-v1.schema.json",
+  "title": "Rebuildable current English segment frontier projection v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "updated_at", "threads", "formal_write_count", "background_processing"],
+  "properties": {
+    "schema_version": {"const": "english_segment_frontier_current_v1"},
+    "updated_at": {"type": ["string", "null"]},
+    "threads": {"type": "object", "additionalProperties": {"type": "object"}},
+    "formal_write_count": {"const": 0},
+    "background_processing": {"const": "none"}
+  }
+}

@@ -1,0 +1,4 @@
+interface:
+  display_name: "英语 Web 建议本地审核与正式入库"
+  short_description: "由本地 GPT-6 逐包裁决网页建议，并走原生英语正式写入链"
+  default_prompt: "Use $kaoyan-english-web-return to inspect the complete GPT-6 Pro English return, make local decisions for every package, and finish the authorized native formal-intake chain without replaying completed work."

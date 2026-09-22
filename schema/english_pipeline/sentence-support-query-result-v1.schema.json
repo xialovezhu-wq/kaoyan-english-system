@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://local.kaoyan-english/schema/english_pipeline/sentence-support-query-result-v1.schema.json",
+  "title": "Bounded fail-soft English sentence-support query result v1",
+  "type": "object",
+  "required": ["schema_version", "status", "reason", "source_id", "sentence_id", "source_hash", "sentence_sha256", "records", "record_count", "formal_write_count"],
+  "properties": {
+    "schema_version": {"const": "english_sentence_support_query_result_v1"},
+    "status": {"enum": ["ready", "missing", "stale", "hash_mismatch", "oversize", "tampered", "unavailable"]},
+    "reason": {"type": ["string", "null"]},
+    "source_id": {"type": "string"},
+    "sentence_id": {"type": ["string", "null"]},
+    "source_hash": {"type": ["string", "null"]},
+    "sentence_sha256": {"type": ["string", "null"]},
+    "lookup_pointer_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "records": {"type": "array"},
+    "record_count": {"type": "integer", "minimum": 0},
+    "history_complete_through": {"type": ["string", "null"], "format": "date"},
+    "history_coverage_status": {"enum": ["complete_local_date", "partial_source_slice"]},
+    "latest_refresh_study_date": {"type": "string", "format": "date"},
+    "formal_write_count": {"const": 0}
+  }
+}

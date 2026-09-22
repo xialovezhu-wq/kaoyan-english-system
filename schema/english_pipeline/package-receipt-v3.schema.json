@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Independent English learning unit receipt",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "receipt_id", "package_id", "package_sha256", "manifest_sha256", "segment_key", "request_sha256", "thread_ref_sha256", "captured_at", "capture_mode", "segment_gate_status", "status", "replayed", "study_date", "missing_fields", "formal_write_count", "background_processing", "package_path"],
+  "properties": {
+    "schema_version": {"const": "english_package_receipt_v3"},
+    "receipt_id": {"type": "string"},
+    "package_id": {"type": "string", "pattern": "^EN-PKG-[0-9]{8}-[A-F0-9]{16}$"},
+    "package_sha256": {"$ref": "#/$defs/sha256"},
+    "manifest_sha256": {"$ref": "#/$defs/sha256"},
+    "segment_key": {"type": "string", "minLength": 1},
+    "request_sha256": {"$ref": "#/$defs/sha256"},
+    "thread_ref_sha256": {"$ref": "#/$defs/sha256"},
+    "captured_at": {"type": "string", "format": "date-time"},
+    "capture_mode": {"const": "independent_unit"},
+    "segment_gate_status": {"const": "ready"},
+    "status": {"enum": ["created", "idempotent_noop"]},
+    "replayed": {"type": "boolean"},
+    "study_date": {"type": "string", "format": "date"},
+    "missing_fields": {"type": "array", "items": {"type": "string"}},
+    "formal_write_count": {"const": 0},
+    "background_processing": {"const": "none"},
+    "package_path": {"type": "string"}
+  },
+  "$defs": {"sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"}}
+}

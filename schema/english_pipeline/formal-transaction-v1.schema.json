@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://local.kaoyan-english/schema/english_pipeline/formal-transaction-v1.schema.json",
+  "title": "Recoverable formal write transaction v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "receipt_id", "batch_id", "study_date", "status", "journal_path", "formal_paths", "preimages", "staged", "prehashes", "proposed_hashes", "safe_action_count", "unresolved_count", "receipt_path", "replaced"],
+  "properties": {
+    "schema_version": {"const": "english_formal_transaction_v1"},
+    "receipt_id": {"type": "string", "minLength": 1},
+    "batch_id": {"type": "string", "minLength": 1},
+    "study_date": {"type": "string", "format": "date"},
+    "status": {"enum": ["prepared", "committing", "committed", "committed_pending_receipt", "closed", "rolled_back", "recovered_rollback"]},
+    "journal_path": {"type": "string", "minLength": 1},
+    "formal_paths": {"$ref": "#/$defs/pathMap"},
+    "preimages": {"$ref": "#/$defs/pathMap"},
+    "staged": {"$ref": "#/$defs/pathMap"},
+    "prehashes": {"$ref": "#/$defs/hashMap"},
+    "proposed_hashes": {"$ref": "#/$defs/hashMap"},
+    "posthashes": {"$ref": "#/$defs/hashMap"},
+    "safe_action_count": {"type": "integer", "minimum": 0},
+    "unresolved_count": {"type": "integer", "minimum": 0},
+    "receipt_path": {"type": "string", "minLength": 1},
+    "receipt_sha256": {"$ref": "#/$defs/sha256"},
+    "support_preflight_receipt_id": {"type": "string"},
+    "support_preflight_receipt_path": {"type": "string"},
+    "support_preflight_receipt_sha256": {"$ref": "#/$defs/sha256"},
+    "support_proposal_sha256": {"$ref": "#/$defs/sha256"},
+    "replaced": {"type": "array", "uniqueItems": true, "items": {"enum": ["master_bank", "mastered_items", "sentence_patterns"]}}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "hashMap": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["master_bank", "mastered_items", "sentence_patterns"],
+      "properties": {
+        "master_bank": {"$ref": "#/$defs/sha256"},
+        "mastered_items": {"$ref": "#/$defs/sha256"},
+        "sentence_patterns": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "pathMap": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["master_bank", "mastered_items", "sentence_patterns"],
+      "properties": {
+        "master_bank": {"type": "string", "minLength": 1},
+        "mastered_items": {"type": "string", "minLength": 1},
+        "sentence_patterns": {"type": "string", "minLength": 1}
+      }
+    }
+  }
+}

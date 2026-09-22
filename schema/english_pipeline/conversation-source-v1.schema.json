@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://local.kaoyan-english/schema/english_pipeline/conversation-source-v1.schema.json",
+  "title": "English conversation source identity v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "subject", "identity"],
+  "properties": {
+    "schema_version": {"const": "english_conversation_source_v1"},
+    "subject": {"const": "english"},
+    "identity": {"type": "object"}
+  }
+}

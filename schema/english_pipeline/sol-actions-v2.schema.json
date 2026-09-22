@@ -1,0 +1,94 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://local.kaoyan-english/schema/english_pipeline/sol-actions-v2.schema.json",
+  "title": "Package-backed typed Sol action proposal v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "action_set_id",
+    "batch_id",
+    "batch_manifest_sha256",
+    "created_at",
+    "producer",
+    "formal_write_count",
+    "formal_writeback",
+    "actions",
+    "unresolved"
+  ],
+  "properties": {
+    "schema_version": {"const": "english_sol_actions_v2"},
+    "action_set_id": {"type": "string"},
+    "batch_id": {"type": "string"},
+    "batch_manifest_sha256": {"$ref": "#/$defs/sha256"},
+    "created_at": {"type": "string", "format": "date-time"},
+    "producer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["role", "model", "prompt_version"],
+      "properties": {
+        "role": {"const": "sol_nightly_reviewer"},
+        "model": {"type": "string"},
+        "prompt_version": {"type": "string"}
+      }
+    },
+    "formal_write_count": {"const": 0},
+    "formal_writeback": {"const": "none"},
+    "actions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["action_id", "action_type", "reason", "evidence_refs"],
+        "properties": {
+          "evidence_refs": {
+            "type": "array",
+            "minItems": 1,
+            "items": {"$ref": "#/$defs/evidenceRef"}
+          }
+        }
+      }
+    },
+    "unresolved": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["action_id", "status", "reason", "evidence_refs", "target", "item"],
+        "properties": {
+          "status": {"const": "needs_user"},
+          "evidence_refs": {
+            "type": "array",
+            "minItems": 1,
+            "items": {"$ref": "#/$defs/evidenceRef"}
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "evidenceRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["package_id", "package_sha256", "pointer", "kind"],
+      "properties": {
+        "package_id": {"type": "string"},
+        "package_sha256": {"$ref": "#/$defs/sha256"},
+        "pointer": {"type": "string"},
+        "kind": {
+          "enum": [
+            "user_message",
+            "assistant_message",
+            "source_text",
+            "independent_correct_use",
+            "question_image",
+            "solution_image",
+            "explanation_image",
+            "user_work_image",
+            "source_article_image",
+            "other_attachment"
+          ]
+        }
+      }
+    }
+  }
+}

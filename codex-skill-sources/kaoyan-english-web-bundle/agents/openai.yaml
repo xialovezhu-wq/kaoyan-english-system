@@ -1,0 +1,4 @@
+interface:
+  display_name: "英语 Capture 分包并行审阅"
+  short_description: "将全部未处理英语资料按文章与体量拆成多个 ZIP，每包附独立网页提示词"
+  default_prompt: "Use $kaoyan-english-web-bundle to partition all unfinished English captures into independently reviewable ZIPs with one prompt per part for parallel GPT-6 Pro sessions."

@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://local.kaoyan-english/schema/english_pipeline/conversation-package-v1.schema.json",
+  "title": "Immutable English conversation package v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "package_id", "subject", "study_date", "timezone", "created_at", "source_identity", "files", "attachments", "missing_fields", "package_canonical_sha256", "formal_write_count", "background_processing", "model_call_count", "mcp_call_count"],
+  "properties": {
+    "schema_version": {"const": "english_conversation_package_v1"},
+    "package_id": {"type": "string", "pattern": "^EN-PKG-[0-9]{8}-[A-F0-9]{16}$"},
+    "subject": {"const": "english"},
+    "study_date": {"type": "string", "format": "date"},
+    "timezone": {"const": "Asia/Shanghai"},
+    "created_at": {"type": "string", "format": "date-time"},
+    "segment_key": {"type": "string", "minLength": 1},
+    "request_sha256": {"$ref": "#/$defs/sha256"},
+    "thread_ref_sha256": {"$ref": "#/$defs/sha256"},
+    "previous_token_sha256": {"oneOf": [{"$ref": "#/$defs/sha256"}, {"type": "null"}]},
+    "capture_mode": {"const": "independent_unit"},
+    "source_identity": {"type": "object"},
+    "files": {"type": "object", "required": ["conversation.json", "source.json"], "additionalProperties": {"$ref": "#/$defs/file"}},
+    "attachments": {"type": "array", "items": {"type": "object"}},
+    "missing_fields": {"type": "array", "uniqueItems": true, "items": {"type": "string"}},
+    "package_canonical_sha256": {"$ref": "#/$defs/sha256"},
+    "formal_write_count": {"const": 0},
+    "background_processing": {"const": "none"},
+    "model_call_count": {"const": 0},
+    "mcp_call_count": {"const": 0}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "file": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["role", "mime_type", "bytes", "sha256"],
+      "properties": {
+        "role": {"type": "string"},
+        "mime_type": {"type": "string"},
+        "bytes": {"type": "integer", "minimum": 0},
+        "sha256": {"$ref": "#/$defs/sha256"}
+      }
+    }
+  }
+}
