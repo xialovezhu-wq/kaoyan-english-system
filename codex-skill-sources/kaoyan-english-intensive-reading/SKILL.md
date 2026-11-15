@@ -7,21 +7,17 @@ description: 根据英语当前原句和真实作答定位断点，按单词、�
 
 保留用户实际选中的 DeepSeek V4.1 Flash 及其供应商和推理档位，不换模型、不另开任务。普通学习问答以提交到完整必要正文可见 10–20 秒为目标，超过 20 秒未达标；未经真实回合计时不得称达标。进度提示、首字或本地脚本耗时不能代替完整回复。
 
-## 每轮先诊断，再按点读取
+## 先诊断，再按点读取
 
-先依据当前英文、用户原样初译/选项理由和必要上下文判断：主谓宾/主干、从句边界、修饰范围是否准确，还是词义、搭配或中文表达问题。保留已正确部分，不从历史标签倒推本次错因。
+先按当前原句和真实首译或首答定位第一个断点，保留已经读对的部分。分清词形、语境义、搭配、主干、从句边界、修饰范围、逻辑关系和中文措辞。“懂了”、提示后复述与独立作答分别作为不同证据。
 
-每个实质学习回复都把当前涉及的具体单词、句型、选项类型和已观察到的错误类型转成精确键，在一次命令中查询。当前没有显示某种错误时，不添加那个错误类型。命中就必须读取返回摘要并用于当轮讲解；未命中立即停止查找，直接按当前证据回复。
+必要时在英语仓库运行一次：
 
-```text
-/usr/local/bin/python3 /Users/your-user/Documents/kaoyan-english/scripts/english_learning_pipeline.py query-personal-summary --key 'word:advertiser' --key 'error_type:lookalike' --max-bytes 8192
+```bash
+python3 scripts/english_learning_pipeline.py query-memory-context --view teaching --key 'word:advertiser' --max-bytes 6144
 ```
 
-支持 `word:`、`phrase:`、`syntax:`、`option_type:`、`error_type:`。单词用原形，词组保持原词组；已存别名由小型哈希路由自动归并。常用机制键：`syntax:subject-predicate`、`syntax:what-clause`、`syntax:help-object-do`、`error_type:lookalike`、`error_type:invented-causation`、`error_type:contrast-overgeneralization`、`option_type:relation-splicing`。通常传 1–4 个当前点，最多 8 个；一个词未收录仍可独立命中已确认的错误类型。
-
-该命令只读一个小索引和命中的摘要文件，不读全部历史、正式词库、文章全文或原始 Capture。`misses` 不是调用其他搜索的理由；`unavailable` 也直接降级，不重试、不换别名试探、不调用 query-learning-context。只有明确正式维护或历史核查任务才走完整历史入口。
-
-摘要记录最初误解/解法、已讲纠正和用户真实后续表现；据此调整这一处讲解与下一步检查，不展示整份历史。摘要没有独立掌握证据时，不把提示后理解写成独立会做。命中摘要不授权泄漏当前题答案。`--question-review` 仅用于用户明确开放该题答案/解析的复盘。
+通常查询 1–3 个真正影响当前讲法的键，最多 8 个。同单元已读且适用可复用。只有规范键未知时才用一次独立 `--query`；未命中、待更新、来源冲突或超预算时，按当前作答继续。历史和明确维护使用 `--view history`／`audit`。原 `query-personal-summary` 仅为兼容读取，`query-learning-context` 用于明确需要的正式词库与学习事件。受保护记录使用精确键或 ID 及解锁题号，短题号另绑定文章来源。详见[统一记忆读取合同](references/memory-context.md)。
 
 ## 实时讲解
 

@@ -194,6 +194,94 @@ def select_bundle_roots(repo: Path, state: Path, *, date: str | None = None, sou
     return date, roots, legacy
 
 
+def _web_teaching_context(state: Path) -> dict[str, bytes]:
+    """Export a bounded, answer-free view; old protected bytes stay local."""
+    import sqlite3
+
+    from .memory_query import _episode_public
+    from .memory_store import is_answer_safe, lifecycle_fingerprint, open_memory_projection, read_lifecycle
+    from .personal_summary import INDEX, SCHEMA, _latest_episode, _read_record, key_hash
+
+    root = state / "personal-summary"
+    index_path = root / "current.json"
+    if not index_path.is_file():
+        return {}
+    prefix = "context/personal-summary/"
+    routes, exported = {}, {}
+    index_sha = file_sha256(index_path)
+    index = load_json(index_path)
+    if index.get("schema_version") != INDEX:
+        raise ValidationError("personal summary index version mismatch")
+    pointers = {p["key"]: p for p in index["routes"].values()}
+    lifecycle = read_lifecycle(state)
+    lifecycle_sha = lifecycle_fingerprint(lifecycle)
+    invalid = set(lifecycle.get("invalidated_episode_ids", []))
+    accepted = lifecycle.get("accepted_summary_hashes", {})
+    generation = None
+    reason = None
+    try:
+        db, manifest = open_memory_projection(state)
+    except (OSError, ValueError, sqlite3.Error, ValidationError):
+        reason = "projection_unavailable"
+    else:
+        try:
+            if manifest["summary_index_sha256"] != index_sha:
+                reason = "projection_not_current"
+            elif lifecycle.get("global_pending"):
+                reason = "summary_update_pending"
+            else:
+                generation = manifest["generation"]
+                for key, digest, question_ids in db.execute(
+                        "SELECT point_key,summary_sha256,question_ids_json FROM points WHERE answer_safe=1 ORDER BY point_key"):
+                    pointer = pointers.get(key, {})
+                    if pointer.get("sha256") != digest or key in lifecycle.get("pending_keys", {}):
+                        continue
+                    record = _read_record(root, pointer)
+                    if not is_answer_safe(record, question_bound=bool(json.loads(question_ids))):
+                        continue
+                    ids = {e["episode_id"] for e in record["episodes"]}
+                    if (ids & invalid or key in lifecycle.get("invalidated_summary_keys", [])) and accepted.get(key) != digest:
+                        continue
+                    active = [e for e in record["episodes"] if e["episode_id"] not in invalid]
+                    if not active:
+                        continue
+                    current = {**record, "episodes": active}
+                    if current.get("latest_episode_id") in invalid:
+                        current.pop("latest_episode_id")
+                    latest = _latest_episode(current)
+                    # No raw refs, quotes, or previous answer trajectories go
+                    # in the ZIP. The compact view is advisory, not evidence.
+                    view = {"schema_version": SCHEMA, "key": key, "aliases": record["aliases"],
+                            "visibility": "answer_free", "publication_basis": "bounded_web_teaching_view",
+                            "source_summary_sha256": digest, "teaching_hint": record["teaching_hint"],
+                            "episodes": [_episode_public(latest)], "episodes_omitted": len(record["episodes"]) - 1}
+                    if record.get("contrasts"):
+                        contrasts = [{k: v for k, v in c.items() if k != "evidence_note"}
+                                     for c in record["contrasts"] if set(c["source_episode_ids"]) == {latest["episode_id"]}]
+                        if contrasts:
+                            view["contrasts"] = contrasts
+                    view_sha = object_sha256(view)
+                    exported[prefix + "objects/" + view_sha + ".json"] = canonical_bytes(view)
+                    for alias in [key, *record["aliases"]]:
+                        routes[key_hash(alias)] = {"key": key, "sha256": view_sha}
+        finally:
+            db.close()
+    if (file_sha256(index_path) != index_sha or lifecycle_fingerprint(read_lifecycle(state)) != lifecycle_sha
+            or generation and load_json(state / "memory/current.json").get("generation") != generation):
+        raise ValidationError("personal memory changed during web bundle freeze")
+    exported[prefix + "current.json"] = canonical_bytes(
+        {"schema_version": INDEX, "routes": routes, "snapshot_kind": "bounded_answer_free_advisory",
+         "coverage": {"state": reason or "available", "generation": generation,
+                      "included_points": len({p["key"] for p in routes.values()}), "total_local_points": len(pointers)}})
+    exported[prefix + "README.txt"] = (
+        "Bounded answer-free advice context. Latest intact observation only; no raw evidence is embedded here.\n"
+        "Objects are content-addressed exports; source_summary_sha256 names the canonical local source.\n"
+        "An absent route can be protected, pending, unavailable, or missing. Do not infer learner state.\n"
+        "Selected original Capture packages are a separate, authorized curation surface.\n"
+    ).encode("utf-8")
+    return exported
+
+
 def web_reference_files(repo: Path, state: Path) -> dict[str, bytes]:
     """Freeze the instructions and existing point notes once for every part."""
     paths = {
@@ -210,28 +298,12 @@ def web_reference_files(repo: Path, state: Path) -> dict[str, bytes]:
         "build_return.py": "scripts/build_english_web_return.py",
     }
     files = {name: (repo / path).read_bytes() for name, path in paths.items() if (repo / path).is_file()}
-    index_path = state / "personal-summary/current.json"
-    if index_path.is_file():
-        from .personal_summary import INDEX, _read_record
-        raw = index_path.read_bytes()
-        index = json.loads(raw)
-        if index.get("schema_version") != INDEX:
-            raise ValidationError("personal summary index version mismatch")
-        prefix = "context/personal-summary/"
-        files[prefix + "current.json"] = raw
-        for pointer in index["routes"].values():
-            _read_record(index_path.parent, pointer)
-            name = "objects/" + pointer["sha256"] + ".json"
-            data = (index_path.parent / name).read_bytes()
-            if object_sha256(json.loads(data)) != pointer["sha256"]:
-                raise ValidationError("personal summary changed during bundle freeze")
-            files[prefix + name] = data
-        files[prefix + "README.txt"] = (
-            "Existing local point summaries, frozen as read-only reference; not new learner evidence.\n"
-            "Read only keys implicated by this part. Protected records require authorized question review.\n"
-            "This copy is bound by the input ZIP inventory, not claimed to be published by Study Library.\n"
-            "Local formal intake rereads current summaries and merges episodes after writer success.\n"
-        ).encode("utf-8")
+    templates = Path(__file__).resolve().parents[1] / "codex-skill-sources/kaoyan-english-web-bundle/references"
+    for entry, filename in (("WEB_INSTRUCTIONS.txt", "PROJECT_INSTRUCTIONS.txt"),
+                            ("contracts/enhancement-deliverables.md", "ENHANCEMENT_DELIVERABLES.md")):
+        if entry not in files and (templates / filename).is_file():
+            files[entry] = (templates / filename).read_bytes()
+    files.update(_web_teaching_context(state))
     return files
 
 

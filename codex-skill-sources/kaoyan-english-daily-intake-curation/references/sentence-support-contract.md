@@ -100,3 +100,5 @@ Missing, stale, ambiguous, tampered or no-match support fails soft immediately t
 current sentence and current translation. Do not rebuild while the learner waits. An
 exact archived package may be reopened only through an already named locator and only
 when the bounded record plus current evidence are insufficient.
+
+Ordinary teaching uses `query-memory-context --view teaching`. Sentence support is a bounded locator and context aid. Protected question sidecars contain no teaching prose. The answer-safe reader also withholds a legacy record when actual answer content is detected.

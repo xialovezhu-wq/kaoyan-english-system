@@ -4,11 +4,11 @@
 
 ## 运行逻辑
 
-1. 精读以当前原句和真实翻译为依据，按涉及的词、句型、选项或错误点查询一次已有个人摘要。查询未命中时直接依据当前作答讲解，不扩大为全历史检索。
+1. 精读以当前原句和真实翻译为依据，用 `query-memory-context` 一次读取涉及的词、句型或错误点。首答、提示后修正、确认理解和独立表现保留各自的证据。普通查询读取短教学上下文与最新适用观察；完整轨迹留给精确历史核查。
 2. 用户明确要求保存时，`capture_current_english.py` 按会话与消息边界封存完整原句、段落或题目单元、原始附件及真实对话。独立单元不需要修复旧续传链。
 3. 快速 Capture 不评分、不更新个人摘要或正式库。`english_web_workflow.py` 负责未完成学习包的网页准备与回包流程。
 4. 正式处理使用 typed actions 和唯一写者：核对来源、原始日期、哈希、权限与幂等关系后，更新词库、句型库和正式学习状态。
-5. 个人摘要只在正式入库时更新；归档、展示资产、后续发布与词汇导出使用各自的完整性回执。失败恢复不应重复正式 apply。
+5. 个人摘要由正式收尾或明确授权的原件复审更新。较长的轨迹继续保留全部观察。正式提交后，摘要、派生索引、归档和发布分别验回。摘要或索引失败时，从原回执恢复缺失步骤。
 
 ## 目录
 
@@ -33,6 +33,8 @@ PYTHONDONTWRITEBYTECODE=1 python3 scripts/capture_current_english.py --help
 PYTHONDONTWRITEBYTECODE=1 python3 scripts/english_learning_pipeline.py --help
 PYTHONDONTWRITEBYTECODE=1 python3 scripts/english_web_workflow.py --help
 ```
+
+统一记忆默认使用本机 SQLite 和精确键。已有按点摘要时，用 `build-memory-index --enable` 构建并启用派生收尾，然后用 `query-memory-context --key word:example` 读取。明确核查旧记录用 `--view history`，受保护题目另需精确题号、对应解锁范围和文章来源。
 
 完整运行前须准备自己的私有数据目录，显式指定 `--repo-root` 以及入口需要的状态路径、会话身份和消息边界。正式 writer 需要完整 schema 与可核验原始证据；不能将本仓库的合成示例冒充个人作答。
 

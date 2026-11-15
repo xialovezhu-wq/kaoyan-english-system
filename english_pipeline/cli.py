@@ -33,6 +33,7 @@ from .sentence_support import (
 )
 from .util import atomic_write_json, file_sha256, load_json, parse_iso_date
 from .writer import apply_nightly, recover_nightly
+from .teaching_query_cli import add_summary_arguments, run_summary_query
 
 
 def _common_parser() -> argparse.ArgumentParser:
@@ -160,15 +161,18 @@ def build_parser() -> argparse.ArgumentParser:
     learning.add_argument("--question-review", action="store_true", help="Only for the user's explicitly authorized answer/analysis review.")
 
     summary = subparsers.add_parser("query-personal-summary", parents=[common], help="Hash diagnosed point keys and read only the matching precomputed summaries.")
-    summary.add_argument("--key", action="append", required=True)
-    summary.add_argument("--question-review", action="store_true")
-    summary.add_argument("--max-bytes", type=int, default=8192)
+    add_summary_arguments(summary)
+
+    from .memory_cli import add_memory_commands
+    add_memory_commands(subparsers, parents=[common])
 
     publish_summary = subparsers.add_parser("publish-personal-summaries", parents=[common], help="Update point summaries only after formal intake; never from raw Capture.")
     publish_summary.add_argument("--input-json", type=Path, required=True)
     publication_basis = publish_summary.add_mutually_exclusive_group(required=True)
     publication_basis.add_argument("--writer-receipt", type=Path)
     publication_basis.add_argument("--bootstrap-existing-formal", action="store_true")
+    publication_basis.add_argument("--source-review-manifest", type=Path,
+                                   help="Explicitly authorized summary maintenance from fully reviewed original learning sources; no formal intake.")
 
     dialogue = subparsers.add_parser("export-unit-dialogue", parents=[common], help="Export exact selected turns at unit close; never creates a Capture.")
     dialogue.add_argument("--rollout", type=Path, required=True)
@@ -692,15 +696,20 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         return {"schema_version": "english_formal_receipt_validation_v1", "status": "PASS", "subject": "english",
                 "receipt_id": receipt["receipt_id"], "publication_event_id": receipt["receipt_id"],
                 "writer_receipt_sha256": file_sha256(args.writer_receipt), "batch_id": manifest["batch_id"],
+                "writer_receipt_path": str(args.writer_receipt.resolve()),
+                "formal_posthashes": receipt.get("formal_posthashes", {}),
+                "package_dispositions": receipt.get("package_dispositions", {}),
+                "completed_at": receipt.get("completed_at"),
                 "package_ids": manifest["package_ids"], "package_sha256s": manifest["package_sha256s"],
                 "decisions": decisions, "verified_attachments": verified_attachments, "formal_write_count": 0}
     if args.command == "export-publication-sources":
         from .publication import build_source_descriptors
         return build_source_descriptors(repo_root)
+    if args.command in {"query-memory-context", "build-memory-index", "memory-status", "recover-memory-closeout"}:
+        from .memory_cli import run_memory_command
+        return run_memory_command(args)
     if args.command == "query-personal-summary":
-        from .personal_summary import query_personal_summary
-        return query_personal_summary(state_dir, keys=args.key,
-                                      question_review=args.question_review, max_bytes=args.max_bytes)
+        return run_summary_query(args)
     if args.command == "publish-personal-summaries":
         from .personal_summary import publish_personal_summaries
         receipt = None
@@ -710,7 +719,8 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
             receipt = run(verified)
         return publish_personal_summaries(repo_root, state_dir, load_json(args.input_json),
                                           formal_receipt=receipt,
-                                          bootstrap_existing_formal=args.bootstrap_existing_formal)
+                                          bootstrap_existing_formal=args.bootstrap_existing_formal,
+                                          source_review=load_json(args.source_review_manifest) if args.source_review_manifest else None)
     if args.command == "export-unit-dialogue":
         from .unit_dialogue import export_unit_dialogue
         return export_unit_dialogue(args.rollout, turn_ids=args.turn_id, output=args.output)

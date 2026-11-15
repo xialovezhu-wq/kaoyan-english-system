@@ -1206,6 +1206,10 @@ def _trusted_consumed_pointer(
                 return None
     except (OSError, ValueError, json.JSONDecodeError, ValidationError):
         return None
+    from .memory_lifecycle import memory_closeout_status
+    if any(memory_closeout_status(state_root, row["receipt_id"]).get("status") == "pending"
+           for row in completed_closeouts):
+        return None
     return {
         "pointer_path": str(pointer_path),
         "cleanup_receipt_path": str(cleanup_path),
@@ -1280,6 +1284,10 @@ def _pending_component_for_closeout(
     package_id: str,
     closeout: dict[str, Any],
 ) -> str:
+    from .memory_lifecycle import memory_closeout_status
+    memory = memory_closeout_status(state_dir, closeout.get("receipt_id"))
+    if memory.get("status") == "pending":
+        return str(memory.get("pending_component") or "personal_summary")
     state_root = state_dir.resolve()
     batch_id = str(closeout.get("batch_id") or "")
     manifest_path = Path(str(closeout.get("manifest_path") or ""))
@@ -1449,6 +1457,32 @@ def _subset_consumed_rows(
     return rows
 
 
+def _postformal_memory_debt_rows(state_dir: Path, *, existing_ids: set[str]) -> list[dict[str, Any]]:
+    """Expose newly registered memory debt even after a prior archive completed."""
+    from .memory_lifecycle import memory_enabled, read_lifecycle
+    if not memory_enabled(state_dir):
+        return []
+    result = []
+    for row in read_lifecycle(state_dir)["pending_receipts"].values():
+        if row.get("status") == "ready":
+            continue
+        binding = row["binding"]
+        for pid, digest in binding.get("completed_packages", {}).items():
+            if pid in existing_ids:
+                continue
+            match = re.fullmatch(r"EN-PKG-(\d{8})-[A-F0-9]{16}", pid)
+            if not match:
+                continue
+            date = match[1]
+            result.append({"package_id": pid, "study_date": f"{date[:4]}-{date[4:6]}-{date[6:]}",
+                "path": None, "status": "archive_pending", "reason": "trusted_formal_closeout_memory_incomplete",
+                "pending_component": row.get("pending_component", "personal_summary"),
+                "package_sha256": digest, "manifest_sha256": None,
+                "trusted_closeouts": _trusted_closeouts_for_package(state_dir, pid, digest), "recovery": []})
+            existing_ids.add(pid)
+    return result
+
+
 def build_backlog_plan(
     state_dir: Path,
     repo_root: Path,
@@ -1479,6 +1513,8 @@ def build_backlog_plan(
             existing_ids={row["package_id"] for row in all_rows},
         )
     )
+    all_rows.extend(_postformal_memory_debt_rows(state_root,
+        existing_ids={row["package_id"] for row in all_rows}))
     future_excluded = [
         {"package_id": row["package_id"], "study_date": row["study_date"]}
         for row in all_rows

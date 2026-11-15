@@ -30,7 +30,11 @@ def _eligible(relative: Path) -> bool:
         return False
     if relative.name in _PRIVATE_NAMES or relative.name.startswith(".env.") or relative.suffix in _PRIVATE_SUFFIXES:
         return False
-    if relative.parts[:2] in {("intake", "learning-context"), ("intake", "publication")}:
+    if relative.parts[:2] in {("intake", "learning-context"), ("intake", "publication"), ("intake", "memory"),
+                             ("intake", "personal-summary"), ("wiki", "memory")}:
+        # Full point memory (including its source refs and old versions) is a
+        # local derived asset. It has no protected per-question Study Library
+        # export contract; do not include it in the generic raw file manifest.
         return False
     # The semantic proposal is formal evidence. Rebuildable lookup generations,
     # objects and current pointers are not a substitute for that evidence.
@@ -191,10 +195,11 @@ def build_source_descriptors(repo_root: Path, *, include_pending: bool = False) 
             "formal_write_count": 0}
 
 
-def complete_formal_closeout(repo_root: Path, state_dir: Path, receipt: dict[str, Any], *,
+def _complete_snapshot_closeout(repo_root: Path, state_dir: Path, receipt: dict[str, Any], *,
                              runner: Callable[..., dict[str, Any]] | None = None,
                              retry_publication: bool = False,
-                             archive_basis_sha256: str | None = None) -> dict[str, Any]:
+                             archive_basis_sha256: str | None = None,
+                             memory_generation: str | None = None) -> dict[str, Any]:
     """Call only after releasing the formal lock; retries never invoke a writer."""
     if receipt.get("mode") != "apply" or receipt.get("status") not in {"APPLIED", "PARTIAL", "NO_ACTION"}:
         raise ValidationError("publication requires a successful formal closeout")
@@ -207,6 +212,10 @@ def complete_formal_closeout(repo_root: Path, state_dir: Path, receipt: dict[str
             raise ValidationError("archive publication basis must be a SHA-256")
         # This is a publication version, never a new formal learning event.
         event_id += ":closeout:" + archive_basis_sha256[:24]
+    if memory_generation:
+        # A completed teaching generation needs its own snapshot identity. This
+        # never creates a second learning event or invokes the formal writer.
+        event_id += ":memory:" + object_sha256(memory_generation)[:24]
     target = state_dir / "publication" / f"{event_id}.json"
     version: dict[str, Any] = {}
     pending_component = "local_context"
@@ -216,17 +225,22 @@ def complete_formal_closeout(repo_root: Path, state_dir: Path, receipt: dict[str
             return {"status": "NOT_PRODUCTION_REPO", "formal_version": version["formal_version"]}
         pending_component = "publication"
         previous = load_json(target) if target.is_file() else None
-        if previous and previous.get("status") == "PUBLISHED":
+        previous_delivery = (previous or {}).get("publication", {})
+        if (previous and (previous.get("snapshot_status") or previous.get("status")) == "PUBLISHED"
+                and (runner is not None or previous_delivery.get("publication_target") != "github")):
             return previous
         if previous and runner is None and not retry_publication and previous.get("formal_version") == version["formal_version"]:
             public_path = Path(str(previous.get("publication", {}).get("receipt_path") or ""))
             try:
-                public_path.resolve().relative_to(PUBLISHER.parent / "publication")
+                public_path.resolve().relative_to((PUBLISHER.parent / "publication").resolve())
                 public_status = load_json(public_path).get("status") if public_path.is_file() else None
             except (ValueError, OSError):
                 public_status = None
-            if public_status == "CLOUD_PENDING" or previous.get("status") == "local_applied_remote_pending":
-                return {**previous, "status": "local_applied_remote_pending", "retry_suppressed": "unchanged_failed_publication"}
+            if public_status == "LOCAL_SNAPSHOT_PENDING" or (
+                public_status is None and previous.get("status") == "local_applied_snapshot_pending"
+            ):
+                return {**previous, "status": "local_applied_snapshot_pending", "retry_suppressed": "unchanged_failed_publication"}
+            # A historical remote failure cannot suppress the local reader snapshot.
         if runner is None:
             if not PUBLISHER.is_file():
                 raise FileNotFoundError("approved publisher is unavailable")
@@ -248,10 +262,43 @@ def complete_formal_closeout(repo_root: Path, state_dir: Path, receipt: dict[str
         value = {"schema_version": "english_publication_hook_receipt_v1", "event_id": event_id,
                  "archive_basis_sha256": archive_basis_sha256,
                  "formal_version": version.get("formal_version"),
-                 "status": "local_applied_remote_pending" if pending_component == "publication" else "FORMAL_COMMITTED_CONTEXT_PENDING",
+                 "status": "local_applied_snapshot_pending" if pending_component == "publication" else "FORMAL_COMMITTED_CONTEXT_PENDING",
                  "pending_component": pending_component, "error_type": type(exc).__name__, "formal_apply_invocation_count": 0}
     try:
         atomic_write_json(target, value)
     except OSError as exc:
         value["receipt_write_error"] = type(exc).__name__
+    return value
+
+
+def complete_formal_closeout(repo_root: Path, state_dir: Path, receipt: dict[str, Any], *,
+                             runner: Callable[..., dict[str, Any]] | None = None,
+                             retry_publication: bool = False,
+                             archive_basis_sha256: str | None = None) -> dict[str, Any]:
+    """Report both snapshot publication and the independently recoverable memory."""
+    from .memory_lifecycle import mark_formal_memory_pending, recover_memory_closeout
+    try:
+        memory = mark_formal_memory_pending(repo_root, state_dir, receipt)
+        if memory.get("pending_component") == "memory_index":
+            memory = recover_memory_closeout(repo_root, state_dir, receipt["receipt_id"])
+    except (OSError, ValueError, ValidationError) as exc:
+        memory = {"status": "pending", "pending_component": "personal_summary",
+                  "error_type": type(exc).__name__, "formal_write_count": 0}
+    value = _complete_snapshot_closeout(repo_root, state_dir, receipt, runner=runner,
+        retry_publication=retry_publication, archive_basis_sha256=archive_basis_sha256,
+        memory_generation=memory.get("memory_generation") if memory.get("status") == "ready" else None)
+    if memory.get("status") in {"NOT_ENABLED", "LEGACY_NOT_REQUIRED"}:
+        return value
+    snapshot_status = value.get("snapshot_status") or value.get("status")
+    value = {**value, "snapshot_status": snapshot_status, "memory": memory,
+             "formal_apply_invocation_count": 0}
+    if memory.get("status") != "ready":
+        value.update(status="FORMAL_COMMITTED_MEMORY_PENDING", pending_component=memory.get("pending_component", "personal_summary"))
+    elif snapshot_status == "PUBLISHED":
+        value.update(status="PUBLISHED", pending_component=None)
+    if value.get("event_id"):
+        try:
+            atomic_write_json(state_dir / "publication" / f"{value['event_id']}.json", value)
+        except OSError as exc:
+            value["receipt_write_error"] = type(exc).__name__
     return value

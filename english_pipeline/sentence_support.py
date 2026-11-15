@@ -8,6 +8,7 @@ import shutil
 from pathlib import Path
 from typing import Any, Iterable
 
+from .answer_safety import contains_answer_signal
 from .errors import IdempotencyConflict, ValidationError
 from .packages import (
     validate_canonical_writer_closeout,
@@ -795,7 +796,8 @@ def _validate_proposal(
             ensure_ascii=False,
             sort_keys=True,
         )
-        if _ANSWER_LEAK_RE.search(answer_surface):
+        if _ANSWER_LEAK_RE.search(answer_surface) or contains_answer_signal(
+                [source.get("source_sentence"), paragraph_context, history, cues, vocabulary]):
             raise ValidationError("sentence-support proposal contains an explicit exam answer leak")
         validated.append(
             {
@@ -2445,6 +2447,8 @@ def query_sentence_support(
             if record.get("answer_safe") is not True or record.get("status") != "ready":
                 return _query_failure("tampered", **identity)
             projected = _project_query_record(record)
+            if contains_answer_signal(projected):
+                return _query_failure("answer_content_withheld", **identity)
             records.append(
                 {
                     "record_sha256": entry["record_sha256"],

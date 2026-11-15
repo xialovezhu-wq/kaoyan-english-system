@@ -47,3 +47,7 @@ The command performs zero formal writes. It must not mark a package reviewed, ac
 Give a numbered list or table with one ZIP download link and one matching prompt-file link for every part. Include article/source, capture count and original date range when useful. Prompts must restrict each web session to its own part, use the shared pinned MCP snapshot, request an independently named return ZIP, and prohibit cross-part learning-count duplication or formal ID allocation. Provide the project link once. Never send only a collection manifest, one giant aggregate ZIP or one generic prompt for all parts.
 
 Web sessions may run in parallel. Local returns must be applied sequentially through kaoyan-english-web-return. After one return changes the bank, reread current formal values before reviewing the next return. Match existing words/senses/SP IDs, merge evidence-supported additions, and preserve previous parts' updates; do not blindly concatenate action files or overwrite shared learning summaries. Pending archive/support stages resume their original transaction.
+
+新包的 `context/personal-summary` 只包含有界的可公开教学内容，并报告覆盖状态。每个点最多携带一个最新观察，省略的旧轨迹及原始答案资料保留在本地。选定 Capture 原件按明确授权单独交接，旧包保留原字节。
+
+公开版默认打包随源码提供的[网页审阅说明](references/PROJECT_INSTRUCTIONS.txt)和[返回合同](references/ENHANCEMENT_DELIVERABLES.md)。如已配置项目专用模板，沿用其原入口。

@@ -853,6 +853,11 @@ def apply_nightly(
             }
             atomic_write_json(transaction_path, transaction)
             _append_journal(journal_path, receipt_id, "transaction_prepared", {"path": str(transaction_path)})
+            from .memory_lifecycle import mark_transaction_memory_pending
+            mark_transaction_memory_pending(repo_root, state_dir, transaction_path, transaction,
+                manifest_sha256=manifest_sha, actions_sha256=actions_sha,
+                package_ids=manifest.get("package_ids", []), package_sha256s=manifest.get("package_sha256s", []),
+                action_results=results)
             replaced: list[str] = []
             try:
                 for name, path in formal_paths.items():
@@ -877,7 +882,10 @@ def apply_nightly(
                         atomic_write_bytes(path, backup.read_bytes())
                 _append_journal(journal_path, receipt_id, "rolled_back", {"replaced": replaced})
                 transaction["status"] = "rolled_back"
+                transaction["posthashes"] = {name: _optional_file_sha256(path) for name, path in formal_paths.items()}
                 atomic_write_json(transaction_path, transaction)
+                from .memory_lifecycle import release_rolled_back_memory_intent
+                release_rolled_back_memory_intent(repo_root, state_dir, transaction_path, transaction)
                 raise
             status = "PARTIAL" if unresolved_count else ("APPLIED" if safe_count else "NO_ACTION")
             write_count = safe_count
@@ -1148,6 +1156,13 @@ def recover_nightly(
             if "learning_events" in transaction.get("formal_paths", {}):
                 formal_paths["learning_events"] = learning_events_path(repo_root).resolve()
             if transaction.get("status") not in OPEN_TRANSACTION_STATUSES:
+                if transaction.get("status") in {"rolled_back", "recovered_rollback"}:
+                    try:
+                        from .memory_lifecycle import release_rolled_back_memory_intent
+                        release_rolled_back_memory_intent(repo_root, state_dir, path, transaction)
+                    except (OSError, ValueError, ValidationError) as exc:
+                        recovered.append({"transaction": str(path), "status": "failed", "reason": "memory_rollback_intent:" + type(exc).__name__})
+                        continue
                 if transaction.get("status") == "closed":
                     try:
                         from .packages import frozen_package_overrides
@@ -1238,6 +1253,8 @@ def recover_nightly(
             transaction["posthashes"] = restored
             atomic_write_json(path, transaction)
             _append_journal(journal_path, transaction["receipt_id"], "recovered_rollback", {"posthashes": restored})
+            from .memory_lifecycle import release_rolled_back_memory_intent
+            release_rolled_back_memory_intent(repo_root, state_dir, path, transaction)
             recovered.append({"transaction": str(path), "status": "RECOVERED_ROLLBACK"})
     from .publication import complete_formal_closeout
     from .archive import retry_archived_publication

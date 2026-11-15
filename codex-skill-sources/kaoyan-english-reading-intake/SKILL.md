@@ -28,3 +28,5 @@ description: "用户明确要求保存英语原句、段落、题目或阅读资
 formal_write_count=0、background_processing=none、model_call_count=0、mcp_call_count=0。快速保存不写 bank、学习事件、调度、个人摘要或正式题卡。正式入库转 daily-intake-curation，网页返回转 web-return，整日未处理包转 web-bundle，教学转 intensive-reading。
 
 临时包或附件绝对路径只属于证据容器，不写入正式 Obsidian 页面。正式入库后才发布展示素材与归档。摘要只在正式入库后更新。
+
+保存完整的原始顺序，包括首答、助手解释、确认理解和后续真实作答。正式语义核对由后置审阅负责。快速保存不读取、更新或等待按点记忆索引。

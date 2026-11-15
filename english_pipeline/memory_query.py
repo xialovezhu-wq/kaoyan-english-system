@@ -1,0 +1,720 @@
+"""Bounded, read-only context assembly over the English memory projection."""
+from __future__ import annotations
+
+import json
+import re
+import sqlite3
+import unicodedata
+from collections import Counter
+from datetime import datetime, time, timezone
+from pathlib import Path
+from typing import Any
+
+from .answer_safety import contains_answer_signal
+from .errors import ValidationError
+from .memory_store import (is_answer_safe, open_memory_projection,
+                           read_lifecycle, record_text, search_tokens)
+from .personal_summary import INDEX, _latest_episode, _read_record, key_hash, normalize_key, observation_time
+from .util import LOCAL_ZONE, canonical_bytes, file_sha256, load_json, object_sha256
+
+QUERY_SCHEMA = "english_memory_context_v1"
+_PREFERENCE_ID = "teaching-preferences"
+
+
+def _time(value: str, *, end_of_day: bool = False) -> datetime:
+    if re.fullmatch(r"\d{4}-\d{2}-\d{2}", value):
+        parsed = datetime.combine(datetime.fromisoformat(value).date(), time.max if end_of_day else time.min)
+    else:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=LOCAL_ZONE)
+    return parsed.astimezone(timezone.utc)
+
+
+def _scoped(episode: dict[str, Any], source_id: str | None, unit_id: str | None,
+            question_id: str | None = None) -> bool:
+    if not (source_id or unit_id or question_id):
+        return True
+    bindings = episode.get("bindings", [])
+    if bindings:
+        # One observation can cite multiple contexts. Its prose cannot be
+        # mechanically split: every context must be within the requested scope.
+        def matches(binding):
+            return ((not source_id or source_id in binding.get("source_ids", []))
+                    and (not unit_id or unit_id in binding.get("unit_ids", []) or unit_id in binding.get("question_ids", []))
+                    and (not question_id or question_id in binding.get("question_ids", [])))
+        return all(matches(binding) for binding in bindings)
+    if source_id and (unit_id or question_id):
+        return False  # A union of IDs is not proof of a source/unit pair.
+    if source_id and source_id not in episode["source_ids"]:
+        return False
+    if unit_id and unit_id not in episode["unit_ids"] and unit_id not in episode["question_ids"]:
+        return False
+    if question_id and question_id not in episode["question_ids"]:
+        return False
+    if source_id and len(episode["source_ids"]) > 1:
+        return False
+    if unit_id and len(set(episode["unit_ids"]) | set(episode["question_ids"])) > 1:
+        return False
+    return True
+
+
+def _episode_public(episode: dict[str, Any], cutoff: datetime | None = None) -> dict[str, Any]:
+    allowed = ("episode_id", "study_date", "observed_at", "last_observed_at", "first_attempt", "correction",
+               "later_observation", "hint_dependence", "reasoning_status", "observation_status", "next_action",
+               "first_attempt_hint_dependence", "followup_status", "source_episode_id", "source_study_dates", "formal_ids")
+    result = {name: episode[name] for name in allowed if name in episode}
+    if cutoff is not None:
+        limitations = []
+        omitted = []
+        follow_at = episode.get("last_observed_at") or episode.get("later_observed_at")
+        try:
+            follow_visible = bool(follow_at) and _time(follow_at, end_of_day=True) <= cutoff
+        except (ValueError, TypeError):
+            follow_visible = False
+        if not follow_visible:
+            for field in ("later_observation", "last_observed_at", "hint_dependence", "reasoning_status", "followup_status"):
+                if field in result:
+                    omitted.append(field)
+                result.pop(field, None)
+            limitations.append("later_observation_time_unknown" if not follow_at else "later_observation_after_cutoff")
+        corrected_at = episode.get("correction_observed_at") or episode.get("corrected_at")
+        try:
+            correction_visible = bool(corrected_at) and _time(corrected_at, end_of_day=True) <= cutoff
+        except (ValueError, TypeError):
+            correction_visible = False
+        if not correction_visible:
+            if "correction" in result:
+                omitted.append("correction")
+            result.pop("correction", None)
+            limitations.append("correction_time_unknown" if not corrected_at else "correction_after_cutoff")
+        if "next_action" in result:
+            omitted.append("next_action")
+        result.pop("next_action", None)
+        result["temporal_limitations"] = limitations
+        result["temporal_fields_omitted"] = omitted
+    return result
+
+
+def _public_ref(audit: dict[str, Any], repo: Path, *, check_access: bool = True) -> dict[str, Any]:
+    allowed = ("path", "sha256", "locator", "locators", "pointer", "pointers", "snapshot_pointer",
+               "member", "package_id", "package_sha256")
+    locator = audit.get("resolved_path") or audit.get("reference", {}).get("path")
+    access = "not_reopened"
+    if isinstance(locator, str) and locator and (check_access or not locator.startswith("/Volumes/")):
+        path = Path(locator) if Path(locator).is_absolute() else repo / locator
+        if path.is_file():
+            access = "available_not_reopened"
+        else:
+            access = "external_source_unavailable" if str(path.resolve()).startswith("/Volumes/") else "source_unavailable_now"
+    return {"source_key": audit["source_key"], "status_at_build": audit["status"],
+            "verification": "verified_at_build" if audit["status"] == "verified" else "audit_at_build",
+            "current_access": access,
+            "locator_status": audit.get("locator_status", "unknown"),
+            **{name: audit["reference"][name] for name in allowed if name in audit.get("reference", {})}}
+
+
+def _claims(state: Path, key: str, episode_ids: set[str], lifecycle: dict[str, Any],
+            as_of: datetime | None, safe: bool) -> list[dict[str, Any]]:
+    path = state / "memory/claims.json"
+    if not path.exists():
+        return []
+    try:
+        document = load_json(path)
+        claims = document.get("claims", {})
+        if not isinstance(claims, dict):
+            return []
+    except (OSError, ValueError):
+        return []
+    target_time = as_of or datetime.now(timezone.utc)
+    invalid = set(lifecycle.get("invalidated_claim_ids", []))
+    result = []
+    for cid, claim in claims.items():
+        if not isinstance(claim, dict) or claim.get("point_key") != key or cid in invalid:
+            continue
+        if claim.get("status") not in {"candidate", "confirmed", "active"}:
+            continue
+        evidence = claim.get("evidence_episode_ids", [])
+        if not evidence or not set(evidence) <= episode_ids:
+            continue
+        if as_of is not None and not claim.get("valid_from"):
+            continue
+        try:
+            if claim.get("valid_from") and _time(claim["valid_from"]) > target_time:
+                continue
+            if claim.get("valid_to") and _time(claim["valid_to"]) <= target_time:
+                continue
+        except (ValueError, TypeError):
+            continue
+        if safe and (claim.get("visibility") == "protected" or contains_answer_signal(claim.get("content"))):
+            continue
+        result.append({name: claim[name] for name in
+                       ("claim_id", "content", "basis", "status", "evidence_episode_ids", "valid_from", "valid_to") if name in claim})
+    return result
+
+
+def _preference(state: Path, query: str | None) -> dict[str, Any] | None:
+    path = state / "personal-summary/teaching-preferences.md"
+    if not path.is_file():
+        return None
+    content = path.read_text(encoding="utf-8")
+    sections = re.split(r"(?m)(?=^## )", content)
+    if query:
+        tokens = search_tokens(query)
+        scored = [(sum(token in section.casefold() for token in tokens), i, section)
+                  for i, section in enumerate(sections)]
+        selected = [section for score, _, section in sorted(scored, key=lambda x: (-x[0], x[1])) if score]
+        if selected:
+            sections = selected
+    return {"key": "preference:teaching-preferences", "role": "explicit_preference",
+            "source": {"path": str(path), "sha256": file_sha256(path)}, "content": "".join(sections),
+            "sections_total": len(sections), "_sections": sections,
+            "not_mastery_evidence": True}
+
+
+def _public_payload(result: dict[str, Any]) -> dict[str, Any]:
+    """Share document identity while retaining every exact reference/locator."""
+    matched = []
+    for original in result["matched"]:
+        point = {key: value for key, value in original.items() if not key.startswith("_")}
+        sources = point.get("sources")
+        if sources:
+            documents = {}
+            common = ("path", "sha256", "status_at_build", "verification", "current_access")
+            for source in sources:
+                identity = tuple(source.get(key) for key in common)
+                documents.setdefault(identity, []).append(source)
+            if len(documents) < len(sources):
+                grouped = []
+                for group in documents.values():
+                    if len(group) == 1:
+                        grouped.append(group[0])
+                    else:
+                        shared = {key: group[0][key] for key in common if key in group[0]}
+                        shared["references"] = [{key: value for key, value in source.items() if key not in common}
+                                                for source in group]
+                        grouped.append(shared)
+                point["sources"] = grouped
+                point["source_format"] = "shared_documents_exact_references"
+        matched.append(point)
+    return {**result, "matched": matched}
+
+
+def _fit(result: dict[str, Any], max_bytes: int) -> dict[str, Any]:
+    """Fit complete observations and preference sections, never sliced claims."""
+    temporal_omissions = Counter()
+    unknown_time = False
+    for point in result["matched"]:
+        for episode in point.get("episodes", []):
+            temporal_omissions.update(episode.get("temporal_fields_omitted", []))
+            unknown_time |= any("unknown" in reason for reason in episode.get("temporal_limitations", []))
+    if temporal_omissions:
+        result = {**result, "coverage": {**result["coverage"], "temporal_fields_omitted": dict(temporal_omissions),
+                                          "temporal_coverage_limited": unknown_time}}
+        if unknown_time and result["status"] == "ready":
+            result["status"] = "partial"
+    public = _public_payload(result)
+    if len(canonical_bytes(public)) <= max_bytes:
+        return public
+    output = {**result, "status": "partial", "matched": [], "misses": [], "unavailable": [],
+              "pending": [], "conflicts": [], "coverage": {**result["coverage"], "budget_limited": True,
+                "points_omitted": 0, "episodes_omitted": 0, "diagnostics_omitted": 0}}
+    for point in result["matched"]:
+        clean = {k: v for k, v in point.items() if not k.startswith("_")}
+        if point.get("role") == "explicit_preference":
+            clean["content"] = ""
+            clean["sections_returned"] = 0
+            clean["sections_omitted"] = point["sections_total"]
+            output["matched"].append(clean)
+            for section in point.get("_sections", []):
+                old_content = clean["content"]
+                clean["content"] += section
+                clean["sections_returned"] += 1
+                clean["sections_omitted"] -= 1
+                if len(canonical_bytes(_public_payload(output))) > max_bytes:
+                    clean["content"] = old_content
+                    clean["sections_returned"] -= 1
+                    clean["sections_omitted"] += 1
+                    break
+            if not clean["sections_returned"]:
+                output["matched"].pop()
+                output["coverage"]["points_omitted"] += 1
+        elif "episodes" in point:
+            episodes = clean.pop("episodes")
+            def report_remaining(start: int) -> None:
+                clean["remaining_episode_ids"] = [episode["episode_id"] for episode in episodes[start:start + 8]]
+                clean["remaining_episode_ids_omitted"] = max(0, len(episodes) - start - 8)
+
+            clean.update({"episodes": [], "episodes_returned": 0, "episodes_omitted": len(episodes)})
+            report_remaining(0)
+            source_pool = {source["source_key"]: source for source in clean.pop("sources", [])}
+            clean["sources"] = []
+            included_sources = set()
+            output["matched"].append(clean)
+            for i, episode in enumerate(episodes):
+                extra_sources = [source_pool[key] for key in episode.get("source_keys", [])
+                                 if key not in included_sources and key in source_pool]
+                clean["episodes"].append(episode)
+                clean["sources"].extend(extra_sources)
+                report_remaining(i + 1)
+                clean["episodes_returned"] += 1
+                clean["episodes_omitted"] -= 1
+                if len(canonical_bytes(_public_payload(output))) > max_bytes:
+                    clean["episodes"].pop()
+                    report_remaining(i)
+                    if extra_sources:
+                        del clean["sources"][-len(extra_sources):]
+                    clean["episodes_returned"] -= 1
+                    clean["episodes_omitted"] += 1
+                    break
+                included_sources.update(source["source_key"] for source in extra_sources)
+            if not clean["episodes"]:
+                output["matched"].pop()
+                output["coverage"]["points_omitted"] += 1
+            output["coverage"]["episodes_omitted"] += clean["episodes_omitted"]
+        else:
+            output["matched"].append(clean)
+            if len(canonical_bytes(_public_payload(output))) > max_bytes:
+                output["matched"].pop()
+                output["coverage"]["points_omitted"] += 1
+    for field in ("misses", "unavailable", "pending", "conflicts"):
+        for item in result[field]:
+            output[field].append(item)
+            if len(canonical_bytes(_public_payload(output))) > max_bytes:
+                output[field].pop()
+                output["coverage"]["diagnostics_omitted"] += 1
+    output["coverage"]["points_returned"] = len(output["matched"])
+    # Very small budgets still get a truthful, bounded envelope.
+    if len(canonical_bytes(_public_payload(output))) > max_bytes:
+        output = {"schema_version": QUERY_SCHEMA, "status": "partial", "matched": [],
+                  "coverage": {"budget_limited": True, "points_omitted": len(result["matched"]),
+                               "diagnostics_omitted": sum(len(result[k]) for k in ("misses", "unavailable", "pending", "conflicts"))},
+                  "formal_write_count": 0, "history_scanned": False}
+    return _public_payload(output)
+
+
+def _result(view: str, as_of: str | None) -> dict[str, Any]:
+    return {"schema_version": QUERY_SCHEMA, "status": "ready", "view": view,
+            "matched": [], "misses": [], "unavailable": [], "pending": [], "conflicts": [],
+            "generation": None, "summary_index_sha256": None,
+            "coverage": {"as_of": as_of, "time_semantics": "occurred_cutoff_with_currently_verified_evidence",
+                         "projection_available": False, "points_returned": 0,
+                         "not_a_mastery_assessment": True},
+            "formal_write_count": 0, "learning_event_write_count": 0, "history_scanned": False}
+
+
+def _state_identity(state: Path) -> tuple[Any, ...]:
+    result = []
+    for path in (state / "memory/lifecycle.json", state / "memory/claims.json", state / "memory/current.json",
+                 state / "personal-summary/current.json"):
+        try:
+            stat = path.stat()
+            result.append((stat.st_ino, stat.st_size, stat.st_mtime_ns))
+        except OSError:
+            result.append(None)
+    return tuple(result)
+
+
+def query_memory_context(repo: Path, state: Path, *, keys: list[str] | None = None,
+                         ids: list[str] | None = None, query: str | None = None,
+                         source_id: str | None = None, unit_id: str | None = None,
+                         view: str = "teaching", as_of: str | None = None,
+                         max_bytes: int = 6144, question_id: str | None = None,
+                         unlocked_question_ids: list[str] | None = None,
+                         candidate_keys: list[str] | None = None) -> dict[str, Any]:
+    """Return evidence-bounded context. Missing indexes never trigger builds."""
+    repo, state = repo.resolve(), state.resolve()
+    keys = list(dict.fromkeys(normalize_key(key) for key in (keys or [])))
+    ids = list(dict.fromkeys(ids or []))
+    if view not in {"teaching", "history", "audit"} or not 512 <= max_bytes <= 16384:
+        raise ValidationError("memory query supports teaching/history/audit and 512..16384 bytes")
+    if len(keys) > 8 or len(ids) > 8 or any(not isinstance(v, str) or not v or len(v) > 256 for v in ids):
+        raise ValidationError("memory query supports at most eight keys and eight bounded IDs")
+    if query is not None and (not isinstance(query, str) or not query.strip() or len(query) > 1000):
+        raise ValidationError("memory natural query must contain 1..1000 characters")
+    if not keys and not ids and not query:
+        raise ValidationError("memory query requires keys, IDs or natural language")
+    for value in (source_id, unit_id, question_id):
+        if value is not None and (not isinstance(value, str) or not value or len(value) > 512):
+            raise ValidationError("invalid memory query scope")
+    if unlocked_question_ids is not None and (not isinstance(unlocked_question_ids, list)
+            or len(unlocked_question_ids) > 32 or any(not isinstance(x, str) or not x or len(x) > 256 for x in unlocked_question_ids)):
+        raise ValidationError("unlocked question IDs must be an explicit bounded list")
+    cutoff = _time(as_of, end_of_day=True) if as_of else None
+    natural_query = query if not (keys or ids) else None
+    initial_state_identity = _state_identity(state)
+    lifecycle = read_lifecycle(state)
+    result = _result(view, as_of)
+    def finish(payload: dict[str, Any]) -> dict[str, Any]:
+        # Denied identities can themselves reveal correctness (for example a
+        # protected "correct-choice" point). Echo only caller-known identities.
+        for field in ("unavailable", "pending", "conflicts"):
+            for item in payload.get(field, []):
+                if item.get("key") and item["key"] not in keys:
+                    item.pop("key", None)
+                    if ids:
+                        item["requested_ids"] = ids
+                    elif keys:
+                        item["requested_keys"] = keys
+        return _fit(payload, max_bytes)
+    pref_requested = _PREFERENCE_ID in ids or "preference:" + _PREFERENCE_ID in ids
+    if query and not keys and not ids and any(term in query for term in ("偏好", "答案公开", "图解", "选项按钮")):
+        pref_requested = True
+    if pref_requested:
+        if as_of:
+            result["unavailable"].append({"id": _PREFERENCE_ID, "reason": "preference_history_unavailable"})
+        elif source_id or unit_id:
+            result["unavailable"].append({"id": _PREFERENCE_ID, "reason": "preference_scope_unavailable"})
+        else:
+            pref = _preference(state, query)
+            if pref:
+                result["matched"].append(pref)
+            else:
+                result["misses"].append(_PREFERENCE_ID)
+    ids = [value for value in ids if value not in {_PREFERENCE_ID, "preference:" + _PREFERENCE_ID}]
+    if pref_requested and not keys and not ids:
+        result["coverage"]["points_returned"] = len(result["matched"])
+        if not result["matched"]:
+            result["status"] = "unavailable" if result["unavailable"] else "not_found"
+        return finish(result)
+    try:
+        summary_index = load_json(state / "personal-summary/current.json")
+        if summary_index.get("schema_version") != INDEX:
+            raise ValueError("invalid current summary index")
+    except (OSError, ValueError):
+        result["unavailable"].append({"reason": "personal_summary_index_unavailable"})
+        result["status"] = "unavailable"
+        return finish(result)
+    try:
+        db, manifest = open_memory_projection(state)
+    except (OSError, ValueError, sqlite3.Error, ValidationError) as exc:
+        result["coverage"]["degraded"] = "memory_projection_unavailable"
+        result["coverage"]["projection_error"] = type(exc).__name__
+        return finish(_fallback_exact(state, summary_index, keys, ids, result, lifecycle, view, cutoff,
+                               source_id, unit_id, question_id, unlocked_question_ids, max_bytes))
+    try:
+        result["generation"] = manifest["generation"]
+        result["summary_index_sha256"] = manifest["summary_index_sha256"]
+        result["coverage"]["projection_available"] = True
+        candidates: list[tuple[str, bool, str]] = []
+        requested_episodes: dict[str, set[str]] = {}
+        for key in keys:
+            row = db.execute("SELECT point_key FROM aliases WHERE alias=?", (key,)).fetchone()
+            if row:
+                candidates.append((row[0], True, "exact_key"))
+            else:
+                result["misses"].append(key)
+        for identity in ids:
+            rows = db.execute("SELECT DISTINCT point_key,kind FROM identities WHERE identity=? ORDER BY point_key LIMIT 9", (identity,)).fetchall()
+            if len(rows) > 8:
+                result["unavailable"].append({"id": identity, "reason": "ambiguous_identity"})
+            elif rows:
+                candidates.extend((row[0], True, "exact_id") for row in rows)
+                for row in rows:
+                    if row[1] == "episode":
+                        requested_episodes.setdefault(row[0], set()).add(identity)
+            else:
+                result["misses"].append(identity)
+        # Known keys that miss never silently turn into guesses. Natural queries
+        # are a distinct, explicit lookup mode.
+        native = _natural_candidates(db, natural_query, source_id, unit_id, cutoff) if natural_query else []
+        candidates.extend(item for item in native if item[2] == "exact_label_candidate")
+        for key in ((candidate_keys or []) if natural_query else [])[:64]:
+            try:
+                candidates.append((normalize_key(key), False, "external_candidate"))
+            except (ValueError, ValidationError, TypeError):
+                continue
+        candidates.extend(item for item in native if item[2] != "exact_label_candidate")
+        seen, eligible = set(), 0
+        for key, exact, method in candidates:
+            if key in seen:
+                continue
+            seen.add(key)
+            row = db.execute("SELECT point_key,summary_sha256,answer_safe,audit_json,question_ids_json,"
+                             "record_json IS NOT NULL AS has_record FROM points WHERE point_key=?", (key,)).fetchone()
+            if row is None:
+                continue
+            audit = json.loads(row["audit_json"])
+            if not row["has_record"]:
+                if exact:
+                    result["unavailable"].append({"key": key, "reason": "invalid_or_missing_summary"})
+                continue
+            current = summary_index["routes"].get(key_hash(key))
+            if not current or current.get("sha256") != row["summary_sha256"]:
+                result["pending"].append({"key": key, "reason": "summary_generation_pending"})
+                continue
+            if audit.get("status") == "conflict":
+                if exact:
+                    result["conflicts"].append({"key": key, "reason": "summary_structure_or_source_conflict", "issues": audit["issues"]})
+                continue
+            teaching_only = view == "teaching" and cutoff is None
+            header_digest = current.get("teaching_sha256") if teaching_only else None
+            if header_digest:
+                head = db.execute("SELECT payload_json FROM teaching_headers WHERE point_key=?", (key,)).fetchone()
+                encoded = head[0] if head else None
+                expected = header_digest
+            else:
+                encoded = db.execute("SELECT record_json FROM points WHERE point_key=?", (key,)).fetchone()[0]
+                expected = row["summary_sha256"]
+            record = json.loads(encoded) if encoded else {}
+            if object_sha256(record) != expected or record.get("key") != key:
+                result["unavailable"].append({"key": key, "reason": "projection_record_corrupt"})
+                continue
+            question_bound = bool(json.loads(row["question_ids_json"]))
+            protected = not bool(row["answer_safe"]) or not is_answer_safe(record, question_bound=question_bound)
+            authorized = exact and bool(question_id) and question_id in (unlocked_question_ids or [])
+            if protected and authorized and re.fullmatch(r"Q\d+(?:[-_:].*)?", question_id or "", re.I) and not source_id:
+                result["unavailable"].append({"key": key, "reason": "protected_question_requires_source_scope"})
+                continue
+            if protected and not authorized:
+                if exact:
+                    result["unavailable"].append({"key": key, "reason": "protected"})
+                continue
+            if lifecycle.get("global_pending") or key in lifecycle.get("pending_keys", {}):
+                result["pending"].append({"key": key, "reason": "memory_update_pending"})
+                continue
+            if key in lifecycle.get("invalidated_summary_keys", []) and lifecycle.get("accepted_summary_hashes", {}).get(key) != row["summary_sha256"]:
+                result["pending"].append({"key": key, "reason": "invalidated_summary_requires_refresh"})
+                continue
+            episodes = []
+            # Select identity and scope first. A teaching read fetches only the
+            # newest eligible episode body and its direct locators after filtering.
+            all_rows = db.execute("SELECT episode_id,occurred_at,ordinal,source_ids_json,unit_ids_json,"
+                                  "question_ids_json,scope_bindings_json FROM episodes WHERE point_key=?",
+                                  (key,)).fetchall()
+            invalid_ids = set(lifecycle.get("invalidated_episode_ids", []))
+            invalid_present = any(item["episode_id"] in invalid_ids for item in all_rows)
+            for item in all_rows:
+                if key in requested_episodes and item["episode_id"] not in requested_episodes[key]:
+                    continue
+                if item["episode_id"] in invalid_ids:
+                    continue
+                scoped = {"source_ids": json.loads(item["source_ids_json"]), "unit_ids": json.loads(item["unit_ids_json"]),
+                          "question_ids": json.loads(item["question_ids_json"]), "bindings": json.loads(item["scope_bindings_json"])}
+                if not _scoped(scoped, source_id, unit_id, question_id if protected else None):
+                    continue
+                if cutoff:
+                    if not item["occurred_at"]:
+                        continue
+                    if _time(item["occurred_at"], end_of_day=True) > cutoff:
+                        continue
+                episodes.append({"episode_id": item["episode_id"], "occurred_at": item["occurred_at"],
+                                 "ordinal": item["ordinal"], **scoped})
+            if not episodes:
+                if exact:
+                    reason = "no_evidence_as_of" if cutoff else "no_evidence_in_scope" if source_id or unit_id or protected else "no_active_evidence"
+                    result["unavailable"].append({"key": key, "reason": reason})
+                continue
+            eligible += 1
+            episodes.sort(key=lambda e: (observation_time(e["occurred_at"]), e["ordinal"]), reverse=True)
+            if not cutoff and not (source_id or unit_id or protected):
+                selected_id = record.get("latest_episode_id")
+                episodes.sort(key=lambda e: e["episode_id"] == selected_id, reverse=True)
+            accepted = lifecycle.get("accepted_summary_hashes", {}).get(key) == row["summary_sha256"]
+            if invalid_present and not accepted:
+                result["pending"].append({"key": key, "reason": "invalidated_evidence_requires_summary_refresh"})
+                continue
+            filtered = len(episodes) != len(all_rows)
+            selected_episodes = episodes[:1] if teaching_only else episodes
+            for episode in selected_episodes:
+                identity = episode["episode_id"]
+                raw = json.loads(db.execute("SELECT episode_json FROM episodes WHERE point_key=? AND episode_id=?",
+                                            (key, identity)).fetchone()[0])
+                episode["raw"] = raw
+                sources = []
+                direct_keys = {object_sha256(ref) for ref in raw.get("evidence", []) if isinstance(ref, dict)}
+                audits = [json.loads(s[0]) for s in db.execute(
+                    "SELECT s.audit_json FROM sources s JOIN dependencies d ON d.source_key=s.source_key WHERE d.point_key=? AND d.episode_id=? ORDER BY s.source_key",
+                    (key, identity))]
+                if view != "audit":
+                    audits = [a for a in audits if a["source_key"] in direct_keys] or audits
+                sources = [_public_ref(source, repo, check_access=not teaching_only) for source in audits]
+                episode["sources"] = sources
+            if not protected and any(contains_answer_signal(e["raw"]) for e in selected_episodes):
+                result["unavailable"].append({"key": key, "reason": "answer_visibility_conflict"})
+                continue
+            episode_ids = {e["episode_id"] for e in episodes}
+            point = {"key": key, "summary_sha256": row["summary_sha256"], "retrieval_method": method,
+                     "visibility": "protected" if protected else "answer_free", "audit": audit,
+                     "claims": _claims(state, key, episode_ids, lifecycle, cutoff, not protected),
+                     "episodes_total": len(all_rows), "episodes_in_scope": len(episodes)}
+            active_count = sum(item["episode_id"] not in invalid_ids for item in all_rows)
+            scope_filtered = filtered and not (accepted and len(episodes) == active_count)
+            summary_scope_incomplete = bool(cutoff or source_id or unit_id or scope_filtered
+                                            or (protected and len(json.loads(row["question_ids_json"])) > 1))
+            point["summary_scope_incomplete"] = summary_scope_incomplete
+            if not summary_scope_incomplete and not cutoff:
+                point["teaching_hint"] = record["teaching_hint"]
+                point["teaching_hint_status"] = "legacy_unclassified"
+                if record.get("contrasts"):
+                    point["contrasts"] = [c for c in record["contrasts"] if set(c.get("source_episode_ids", [])) <= episode_ids]
+            elif summary_scope_incomplete:
+                point["teaching_hint_omitted"] = "current_hint_is_not_historical_evidence" if cutoff else "summary_scope_incomplete"
+            if view == "teaching" and not cutoff:
+                latest = episodes[0]
+                point["latest_observation"] = _episode_public(latest["raw"])
+                point["sources"] = latest["sources"]
+            else:
+                sources = {source["source_key"]: source for e in episodes for source in e["sources"]}
+                point["sources"] = list(sources.values())
+                point["episodes"] = [{**_episode_public(e["raw"], cutoff), "source_keys": [s["source_key"] for s in e["sources"]],
+                                       # File and package aliases remain in the
+                                       # exact source references. Repeating them
+                                       # per observation crowds out real history.
+                                       "source_ids": [sid for sid in e["source_ids"] if "/" not in sid and not sid.startswith("EN-PKG-")],
+                                       "unit_ids": e["unit_ids"]} for e in episodes]
+            result["matched"].append(point)
+            if len(result["matched"]) >= 8:
+                break
+        result["coverage"].update({"candidate_count": len(seen), "points_in_scope": eligible,
+                                    "points_returned": len(result["matched"]),
+                                    "source_integrity_checked_at_build": manifest.get("source_audit_performed", False),
+                                    "original_sources_reopened": False,
+                                    "source_graph_expansion": "transitive" if view == "audit" else "direct_references; audit_view_expands_ancestors"})
+        if _state_identity(state) != initial_state_identity:
+            result["matched"] = [point for point in result["matched"] if point.get("role") == "explicit_preference"]
+            result["pending"].append({"reason": "memory_state_changed_during_query"})
+            result["coverage"]["points_returned"] = len(result["matched"])
+        if result["matched"]:
+            result["status"] = "partial" if any(result[k] for k in ("misses", "unavailable", "pending", "conflicts")) else "ready"
+        elif result["pending"]:
+            result["status"] = "stale" if all(item["reason"] == "summary_generation_pending" for item in result["pending"]) else "pending"
+        elif result["conflicts"]:
+            result["status"] = "conflict"
+        elif any(item.get("reason", "").startswith("no_") for item in result["unavailable"]):
+            result["status"] = "no_evidence"
+        elif result["unavailable"]:
+            result["status"] = "unavailable"
+        else:
+            result["status"] = "not_found"
+        return finish(result)
+    finally:
+        db.close()
+
+
+def _natural_candidates(db: sqlite3.Connection, query: str, source_id: str | None, unit_id: str | None,
+                        cutoff: datetime | None = None) -> list[tuple[str, bool, str]]:
+    tokens = search_tokens(query)[:80]
+    if not tokens:
+        return []
+    match = " OR ".join('"' + token.replace('"', '""') + '"' for token in tokens)
+    where, params = ["p.answer_safe=1"], []
+    episode_filters = ["e.point_key=p.point_key"]
+    if source_id or unit_id:
+        def scope_match(bindings, sources, units, questions):
+            return int(_scoped({"bindings": json.loads(bindings), "source_ids": json.loads(sources),
+                                "unit_ids": json.loads(units), "question_ids": json.loads(questions)}, source_id, unit_id))
+        db.create_function("memory_scope_matches", 4, scope_match, deterministic=True)
+        episode_filters.append("memory_scope_matches(e.scope_bindings_json,e.source_ids_json,e.unit_ids_json,e.question_ids_json)=1")
+    if cutoff:
+        episode_filters.append("(CASE WHEN length(e.occurred_at)=10 THEN julianday(e.occurred_at||'T23:59:59.999999+08:00') ELSE julianday(e.occurred_at) END)<=julianday(?)")
+        params.append(cutoff.isoformat())
+    if len(episode_filters) > 1:
+        where.append("EXISTS(SELECT 1 FROM episodes e WHERE " + " AND ".join(episode_filters) + ")")
+    sql = ("SELECT safe_search.point_key,bm25(safe_search) FROM safe_search JOIN points p ON p.point_key=safe_search.point_key "
+           "WHERE safe_search MATCH ? AND " + " AND ".join(where) + " ORDER BY bm25(safe_search),safe_search.point_key LIMIT 48")
+    rows = db.execute(sql, [match, *params]).fetchall()
+    # Overlapping CJK bigrams/trigrams are retrieval aids, not independent
+    # query requirements. Prefer coverage of distinct user-supplied terms so
+    # repeating one rare phrase cannot outrank a point matching all concepts.
+    primary_terms = list(dict.fromkeys(part.casefold() for part in
+        re.findall(r"[a-zA-Z0-9]+(?:[-'][a-zA-Z0-9]+)*|[\u3400-\u9fff]+", query)
+        if 2 <= len(part) <= 24))
+    if len(primary_terms) > 1:
+        scores = {}
+        for row in rows:
+            text = record_text(json.loads(db.execute("SELECT record_json FROM points WHERE point_key=?", (row[0],)).fetchone()[0])).casefold()
+            scores[row[0]] = sum(term in text for term in primary_terms)
+        rows = sorted(rows, key=lambda row: (-scores[row[0]], row[1], row[0]))
+    result = [(row[0], False, "native_lexical_candidate") for row in rows]
+    plain = unicodedata.normalize("NFKC", query).casefold().strip()
+    forms = [plain]
+    # Inflections are candidate generation only. They never rewrite IDs or
+    # declare two senses equivalent, and source/scope checks still follow.
+    if re.fullmatch(r"[a-z]+", plain):
+        if plain.endswith("ies"):
+            forms.append(plain[:-3] + "y")
+        if plain.endswith("s") and not plain.endswith("ss"):
+            forms.append(plain[:-1])
+        if plain.endswith("ed"):
+            forms.extend([plain[:-2], plain[:-1]])
+        if plain.endswith("ing"):
+            forms.extend([plain[:-3], plain[:-3] + "e"])
+    direct = []
+    for form in dict.fromkeys(forms):
+        for row in db.execute("SELECT a.point_key FROM aliases a JOIN points p ON p.point_key=a.point_key WHERE p.answer_safe=1 AND substr(a.alias,instr(a.alias,':')+1)=? ORDER BY a.point_key LIMIT 8", (form,)):
+            direct.append((row[0], False, "exact_label_candidate" if form == plain else "inflection_candidate"))
+    return direct + result
+
+
+def _fallback_exact(state: Path, index: dict[str, Any], keys: list[str], ids: list[str], result: dict[str, Any],
+                    lifecycle: dict[str, Any], view: str, cutoff: datetime | None,
+                    source_id: str | None, unit_id: str | None, question_id: str | None,
+                    unlocked_question_ids: list[str] | None, max_bytes: int) -> dict[str, Any]:
+    """Retain the old exact safe path, with explicit missing coverage."""
+    for identity in ids:
+        result["unavailable"].append({"id": identity, "reason": "identity_index_unavailable"})
+    seen = set()
+    for key in keys:
+        pointer = index["routes"].get(key_hash(key))
+        if pointer is None:
+            result["misses"].append(key)
+            continue
+        canonical = pointer["key"]
+        if canonical in seen:
+            continue
+        seen.add(canonical)
+        if lifecycle.get("global_pending") or canonical in lifecycle.get("pending_keys", {}):
+            result["pending"].append({"key": canonical, "reason": "memory_update_pending"})
+            continue
+        if canonical in lifecycle.get("invalidated_summary_keys", []) and lifecycle.get("accepted_summary_hashes", {}).get(canonical) != pointer["sha256"]:
+            result["pending"].append({"key": canonical, "reason": "invalidated_summary_requires_refresh"})
+            continue
+        try:
+            record = _read_record(state / "personal-summary", pointer, bounded=True)
+        except (OSError, ValueError, KeyError, TypeError, ValidationError):
+            result["unavailable"].append({"key": canonical, "reason": "invalid_or_missing_summary"})
+            continue
+        ancestor_unverified = bool(record.get("maintenance_parent_sha256"))
+        for episode in record.get("episodes", []):
+            for ref in episode.get("evidence", []):
+                path = ref.get("path")
+                if isinstance(path, str):
+                    resolved = (Path(path) if Path(path).is_absolute() else state.parent / path).resolve()
+                    ancestor_unverified |= resolved.parent == (state / "personal-summary/objects").resolve()
+        if ancestor_unverified:
+            result["unavailable"].append({"key": canonical, "reason": "inherited_visibility_unverified"})
+            continue
+        if not is_answer_safe(record):
+            result["unavailable"].append({"key": canonical, "reason": "protected_or_scope_unverified"})
+            continue
+        if source_id or unit_id:
+            result["unavailable"].append({"key": canonical, "reason": "scope_index_unavailable"})
+            continue
+        invalid = set(lifecycle.get("invalidated_episode_ids", []))
+        if invalid & {episode["episode_id"] for episode in record["episodes"]}:
+            result["pending"].append({"key": canonical, "reason": "invalidated_evidence_requires_summary_refresh"})
+            continue
+        episodes = [e for e in record["episodes"] if not cutoff or (e.get("observed_at") or e.get("study_date"))
+                    and _time(e.get("observed_at") or e["study_date"], end_of_day=True) <= cutoff]
+        if not episodes:
+            result["unavailable"].append({"key": canonical, "reason": "no_evidence_as_of"})
+            continue
+        if not cutoff:
+            latest = _latest_episode(record)
+            episodes.sort(key=lambda e: (e["episode_id"] == latest["episode_id"],
+                                         observation_time(e.get("observed_at") or e.get("study_date"))), reverse=True)
+        else:
+            episodes.sort(key=lambda e: observation_time(e.get("observed_at") or e.get("study_date")), reverse=True)
+        point = {"key": canonical, "summary_sha256": pointer["sha256"], "retrieval_method": "degraded_exact_summary",
+                 "teaching_hint_status": "legacy_unclassified", "coverage": "source_and_scope_index_unavailable"}
+        if not cutoff:
+            point["teaching_hint"] = record["teaching_hint"]
+        if view == "teaching" and not cutoff:
+            point["latest_observation"] = _episode_public(episodes[0])
+        else:
+            point["episodes"] = [_episode_public(e, cutoff) for e in episodes]
+        result["matched"].append(point)
+    result["coverage"]["points_returned"] = len(result["matched"])
+    result["status"] = "degraded" if result["matched"] else "pending" if result["pending"] else "unavailable"
+    return _fit(result, max_bytes)

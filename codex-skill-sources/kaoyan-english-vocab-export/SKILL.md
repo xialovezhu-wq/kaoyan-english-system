@@ -61,3 +61,5 @@ Use references/output-template.md. Preserve source sentence, package evidence, m
 - No verified conversation packages: report completion unsaved.
 - Source sentence missing: mark needs_context.
 - Validation fails: do not fabricate a list or receipt.
+
+教学摘要、提示后复述和旧词表只可帮助核对来源或理解断点。是否已掌握及是否排除某词，由正式有效状态和独立证据决定。

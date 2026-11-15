@@ -108,3 +108,5 @@ Publication still runs after releasing the formal lock.
 ## English project E
 
 The English-only `project-E` route is owned by kaoyan-english-web-return. It preserves exact downloaded advice and local decisions as explicitly labelled model artifacts, not fabricated learner messages. Original study_date stays with the original package; the generated E adjudication observed_at must equal the exact supplementary package actual capture timestamp. No mastery or review eligibility is inferred from accepted/modified/rejected. Only this route seals web_review_id and reviewed action hashes for native writer admission.
+
+Verify the bound personal summary and memory index as separate post-commit steps when enabled. Teaching reads the bounded memory context. Formal maintenance continues to use the exact formal event entrypoint.
