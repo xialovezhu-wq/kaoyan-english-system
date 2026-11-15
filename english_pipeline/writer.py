@@ -666,6 +666,17 @@ def apply_nightly(
     validate_sol_actions(actions_doc, manifest, manifest_sha)
     if apply and authorization != manifest["batch_id"]:
         raise AuthorizationError("apply requires --authorization equal to the exact frozen batch_id")
+    model_review_required = False
+    if apply and manifest.get("schema_version") == "english_nightly_manifest_v3" and manifest["package_documents"]:
+        from .formal_model_review import formal_model_review_enabled, prepare_formal_model_review
+        model_review_required = formal_model_review_enabled(state_dir)
+    if model_review_required:
+        from .backlog import _existing_closeout_for_batch
+        committed = _existing_closeout_for_batch(state_dir, manifest, actions_doc["action_set_id"])
+        if committed:
+            if committed[1]["actions_sha256"] != actions_sha:
+                raise ValidationError("committed action set has different bytes")
+            return committed
     support_preflight_binding: dict[str, Any] | None = None
     if apply and manifest.get("schema_version") == "english_nightly_manifest_v3":
         from .sentence_support import (
@@ -704,16 +715,32 @@ def apply_nightly(
     ).resolve()
     if "learning_events" in manifest.get("formal_snapshot", {}):
         formal_paths["learning_events"] = learning_events_path(repo_root).resolve()
+    expected = {name: manifest["formal_snapshot"][name]["sha256"] for name in formal_paths}
+    model_review = None
+    # Hash before calling a provider. The writer repeats the CAS under its
+    # original lock, so reviewing a draft cannot race a different commit.
+    if (model_review_required and not _open_transaction_paths(state_dir)
+            and {name: _optional_file_sha256(path) for name, path in formal_paths.items()} == expected):
+        model_review = prepare_formal_model_review(state_dir, repo_root, manifest, actions_doc,
+                                                   manifest_sha, actions_sha)
+    evidence_binding = dict(support_preflight_binding or {})
+    if model_review:
+        evidence_binding["formal_model_review"] = model_review
 
     with exclusive_lock(lock_path):
         pending_transactions = _open_transaction_paths(state_dir)
         if pending_transactions:
             raise ValidationError(f"recovery_required: open formal transactions {pending_transactions}")
+        if model_review_required:
+            committed = _existing_closeout_for_batch(state_dir, manifest, actions_doc["action_set_id"])
+            if committed:
+                if committed[1]["actions_sha256"] != actions_sha:
+                    raise ValidationError("committed action set has different bytes")
+                return committed
         prehashes = {
             name: _optional_file_sha256(path)
             for name, path in formal_paths.items()
         }
-        expected = {name: manifest["formal_snapshot"][name]["sha256"] for name in formal_paths}
         _append_journal(journal_path, receipt_id, "started", {"mode": mode, "prehashes": prehashes})
         if prehashes != expected:
             receipt = {
@@ -737,11 +764,19 @@ def apply_nightly(
                 "formal_write_count": 0,
                 "action_results": [],
                 "validation": {"status": "FAIL", "reason": "formal prehash drift", "expected": expected},
-                **(support_preflight_binding or {}),
+                **evidence_binding,
             }
             _append_journal(journal_path, receipt_id, "cas_conflict", receipt["validation"])
             atomic_write_json(receipt_path, receipt)
             return receipt_path, receipt
+        if model_review_required and not model_review:
+            raise ValidationError("formal model review pre-transaction binding is missing; resume this batch")
+        if model_review_required:
+            if file_sha256(manifest_path) != manifest_sha or file_sha256(actions_path) != actions_sha:
+                raise ValidationError("formal draft changed while preparing model review")
+            # Source packages are immutable by contract. Recheck the bytes
+            # after network work before using the already resolved action set.
+            validate_sol_actions(load_json(actions_path), manifest, manifest_sha)
 
         master_rows = read_csv(formal_paths["master_bank"], MASTER_HEADER)
         mastered_rows = read_csv(formal_paths["mastered_items"], MASTERED_HEADER)
@@ -848,7 +883,7 @@ def apply_nightly(
                 "safe_action_count": safe_count,
                 "unresolved_count": unresolved_count,
                 "receipt_path": str(receipt_path),
-                **(support_preflight_binding or {}),
+                **evidence_binding,
                 "replaced": [],
             }
             atomic_write_json(transaction_path, transaction)
@@ -966,7 +1001,7 @@ def apply_nightly(
             "workflow_status": (
                 "FORMAL_COMMITTED_SUPPORT_PENDING" if apply else status
             ),
-            **(support_preflight_binding or {}),
+            **evidence_binding,
         }
         atomic_write_json(receipt_path, receipt)
         if apply and fault_after_receipt:
@@ -1053,6 +1088,8 @@ def _validate_recovery_commit_binding(
             raise ValidationError(
                 "recovery committed support preflight binding mismatch"
             )
+        if transaction.get("formal_model_review") != receipt.get("formal_model_review"):
+            raise ValidationError("recovery committed formal model review binding mismatch")
         preflight_path = Path(
             str(receipt.get("support_preflight_receipt_path") or "")
         )

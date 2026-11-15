@@ -58,6 +58,8 @@ For every returned date in ascending order:
 
 `prepare-day` freezes the exact originals and supplements for that day and compiles the reviewed native actions/support. The first `run-day` is the required dry run and preflight. Resolve only real validation or current-state conflicts; do not rewrite already accepted independent items merely for style.
 
+The v7 apply route binds English Embeddings and Decisions review for this exact native batch before starting the writer transaction. Existing web pre-screen output stays advisory. A pending model step resumes the same batch and reuses completed requests, while an already committed batch resumes only its outstanding post-formal stages.
+
 When formal apply is authorized and the dry run passes, run exactly:
 
 ```text

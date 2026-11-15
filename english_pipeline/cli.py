@@ -909,9 +909,12 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 2
     except (PipelineError, OSError, ValueError, json.JSONDecodeError) as exc:
+        from .errors import FormalModelReviewPending
         command = getattr(args, "command", None)
         status = (
-            "FORMAL_COMMITTED_SUPPORT_PENDING"
+            "FORMAL_MODEL_REVIEW_PENDING"
+            if isinstance(exc, FormalModelReviewPending)
+            else "FORMAL_COMMITTED_SUPPORT_PENDING"
             if command == "refresh-sentence-support"
             else
             "FORMAL_COMMITTED_ARCHIVE_PENDING"

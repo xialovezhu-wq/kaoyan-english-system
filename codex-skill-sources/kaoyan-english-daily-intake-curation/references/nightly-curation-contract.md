@@ -2,6 +2,10 @@
 
 Read backlog-gate-contract.md first. A through-cutoff plan may contain several dates, but each freeze remains one original study_date. Pass exact package IDs when a plan subset applies; never freeze needs_user, damaged, already-consumed or future packages.
 
+In v7, an authorized writer apply binds formal model review for the exact frozen sources and typed actions when its policy is enabled. Embeddings ranks bounded English formal and same-batch candidates. Decisions labels the comparison evidence for review. Read the bound cold receipt through the writer result. The frozen evidence and final reviewed typed actions remain the writer's authority.
+
+The writer uses the same receipt for the exact manifest and actions or prepares it before taking the formal write lock, including on the approved web-return route. Its compact binding is recorded in the transaction and apply receipt. A nonempty duplicate-only batch still enters model review. Exact retries reuse successful stages. Provider failure or request-budget exhaustion leaves the batch unstarted and can resume from its saved receipt; reconcile ambiguous network outcomes before repeating a request. Open transactions follow the existing recovery entry. An empty batch, validation-only run or post-commit recovery never calls either endpoint.
+
 Freeze:
 
 ```text

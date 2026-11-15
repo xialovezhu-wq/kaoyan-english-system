@@ -49,6 +49,8 @@ Historical Luna candidate files may be read only as provenance for old records. 
 
 ## Local decisions and native read leaves
 
+When the v7 model-review policy is enabled, an authorized apply binds source-exact Embeddings and Decisions evidence before formal writes. Reuse the same reviewed batch on interruption, and keep all genuine action and learner-evidence decisions within the existing typed writer contract.
+
 The current parent keeps the final semantic decisions and writer authority.
 
 If the root task is Ultra, use native proactive orchestration directly and do not invoke the orchestrate Skill.
