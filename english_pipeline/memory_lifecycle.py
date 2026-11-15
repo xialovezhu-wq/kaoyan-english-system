@@ -683,7 +683,7 @@ def finish_summary_memory(repo: Path, state: Path, publication_id: str | None) -
             pages = publish_managed_pages(repo, state, lifecycle_override=lifecycle)
             if mirror.get("status") in {"partial", "failed", "error"} or pages.get("status") in {"partial", "failed", "error"}:
                 raise ValidationError("memory mirror or managed-page closure is incomplete")
-            row.update(status="ready", pending_component=None, memory_generation=generation,
+            row.update(status="ready", pending_component=None, memory_generation=generation, ready_at=utc_now(),
                        projection_receipt=built, mirror_receipt=mirror, pages_receipt=pages)
             row.pop("last_error", None)
             atomic_write_json(path, row)

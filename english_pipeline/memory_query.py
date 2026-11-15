@@ -19,6 +19,15 @@ from .util import LOCAL_ZONE, canonical_bytes, file_sha256, load_json, object_sh
 
 QUERY_SCHEMA = "english_memory_context_v1"
 _PREFERENCE_ID = "teaching-preferences"
+_PUBLICATION_ID = re.compile(r"EN-MEMORY-[A-F0-9]{24}")
+_QUESTION_IN_UNIT = re.compile(r"(?<![A-Z0-9])Q\d+(?![A-Z0-9])", re.I)
+
+
+def _question_scope_matches(question_id: str, questions: list[str], units: list[str]) -> bool:
+    # Older full-review packages use their first question as the file-level
+    # label for a range of questions. That label establishes article scope only.
+    return set(questions) == {question_id} and all(
+        len(set(_QUESTION_IN_UNIT.findall(unit.upper()))) <= 1 for unit in units)
 
 
 def _time(value: str, *, end_of_day: bool = False) -> datetime:
@@ -42,7 +51,8 @@ def _scoped(episode: dict[str, Any], source_id: str | None, unit_id: str | None,
         def matches(binding):
             return ((not source_id or source_id in binding.get("source_ids", []))
                     and (not unit_id or unit_id in binding.get("unit_ids", []) or unit_id in binding.get("question_ids", []))
-                    and (not question_id or question_id in binding.get("question_ids", [])))
+                    and (not question_id or _question_scope_matches(
+                        question_id, binding.get("question_ids", []), binding.get("unit_ids", []))))
         return all(matches(binding) for binding in bindings)
     if source_id and (unit_id or question_id):
         return False  # A union of IDs is not proof of a source/unit pair.
@@ -50,7 +60,7 @@ def _scoped(episode: dict[str, Any], source_id: str | None, unit_id: str | None,
         return False
     if unit_id and unit_id not in episode["unit_ids"] and unit_id not in episode["question_ids"]:
         return False
-    if question_id and question_id not in episode["question_ids"]:
+    if question_id and not _question_scope_matches(question_id, episode["question_ids"], episode["unit_ids"]):
         return False
     if source_id and len(episode["source_ids"]) > 1:
         return False
@@ -177,6 +187,17 @@ def _public_payload(result: dict[str, Any]) -> dict[str, Any]:
     matched = []
     for original in result["matched"]:
         point = {key: value for key, value in original.items() if not key.startswith("_")}
+        episode_ids = {episode["episode_id"] for episode in point.get("episodes", [])}
+        if "latest_observation" in point:
+            episode_ids.add(point["latest_observation"]["episode_id"])
+        omitted = 0
+        for field, dependency in (("claims", "evidence_episode_ids"), ("contrasts", "source_episode_ids")):
+            if field in point:
+                delivered = [item for item in point[field] if set(item.get(dependency, [])) <= episode_ids]
+                omitted += len(point[field]) - len(delivered)
+                point[field] = delivered
+        if omitted:
+            point["dependent_items_omitted"] = omitted
         sources = point.get("sources")
         if sources:
             documents = {}
@@ -315,13 +336,30 @@ def _state_identity(state: Path) -> tuple[Any, ...]:
     return tuple(result)
 
 
+def _published_generation(state: Path, publication_id: str, cutoff: datetime) -> dict[str, Any]:
+    path = state / "memory/publications" / f"{publication_id}.json"
+    if path.resolve() != path:
+        raise ValidationError("memory replay requires a local publication receipt")
+    receipt = load_json(path)
+    if (receipt.get("publication_id") != publication_id or receipt.get("status") != "ready"
+            or receipt.get("pending_component") is not None or not receipt.get("ready_at")):
+        raise ValidationError("memory publication lacks a proven ready timestamp")
+    generation = receipt.get("memory_generation")
+    if not isinstance(generation, str) or not re.fullmatch(r"[a-f0-9]{64}", generation):
+        raise ValidationError("memory publication lacks a valid generation")
+    if _time(receipt["ready_at"], end_of_day=True) > cutoff:
+        raise ValidationError("memory publication became ready after the cutoff")
+    return receipt
+
+
 def query_memory_context(repo: Path, state: Path, *, keys: list[str] | None = None,
                          ids: list[str] | None = None, query: str | None = None,
                          source_id: str | None = None, unit_id: str | None = None,
                          view: str = "teaching", as_of: str | None = None,
                          max_bytes: int = 6144, question_id: str | None = None,
                          unlocked_question_ids: list[str] | None = None,
-                         candidate_keys: list[str] | None = None) -> dict[str, Any]:
+                         candidate_keys: list[str] | None = None,
+                         known_publication: str | None = None) -> dict[str, Any]:
     """Return evidence-bounded context. Missing indexes never trigger builds."""
     repo, state = repo.resolve(), state.resolve()
     keys = list(dict.fromkeys(normalize_key(key) for key in (keys or [])))
@@ -341,10 +379,26 @@ def query_memory_context(repo: Path, state: Path, *, keys: list[str] | None = No
             or len(unlocked_question_ids) > 32 or any(not isinstance(x, str) or not x or len(x) > 256 for x in unlocked_question_ids)):
         raise ValidationError("unlocked question IDs must be an explicit bounded list")
     cutoff = _time(as_of, end_of_day=True) if as_of else None
+    if known_publication is not None and (
+            not isinstance(known_publication, str) or not _PUBLICATION_ID.fullmatch(known_publication) or cutoff is None
+            or view == "teaching" or query is not None):
+        raise ValidationError("known publication requires an exact key/ID, a cutoff, and history or audit view")
     natural_query = query if not (keys or ids) else None
     initial_state_identity = _state_identity(state)
     lifecycle = read_lifecycle(state)
     result = _result(view, as_of)
+    short_question_without_source = bool(question_id and not source_id
+                                         and re.fullmatch(r"(?:Q)?\d+(?:[-_:].*)?", question_id, re.I))
+    receipt = None
+    if known_publication:
+        result["coverage"].update(time_semantics="occurred_cutoff_with_published_generation",
+                                  known_publication=known_publication, live_safety_veto_applied=True,
+                                  historical_claims_and_preferences_available=False)
+        try:
+            receipt = _published_generation(state, known_publication, cutoff)
+        except (OSError, ValueError, TypeError, AttributeError, ValidationError):
+            result.update(status="unavailable", unavailable=[{"reason": "historical_publication_unavailable"}])
+            return _fit(result, max_bytes)
     def finish(payload: dict[str, Any]) -> dict[str, Any]:
         # Denied identities can themselves reveal correctness (for example a
         # protected "correct-choice" point). Echo only caller-known identities.
@@ -363,7 +417,7 @@ def query_memory_context(repo: Path, state: Path, *, keys: list[str] | None = No
     if pref_requested:
         if as_of:
             result["unavailable"].append({"id": _PREFERENCE_ID, "reason": "preference_history_unavailable"})
-        elif source_id or unit_id:
+        elif source_id or unit_id or question_id:
             result["unavailable"].append({"id": _PREFERENCE_ID, "reason": "preference_scope_unavailable"})
         else:
             pref = _preference(state, query)
@@ -377,22 +431,38 @@ def query_memory_context(repo: Path, state: Path, *, keys: list[str] | None = No
         if not result["matched"]:
             result["status"] = "unavailable" if result["unavailable"] else "not_found"
         return finish(result)
+    if receipt is None:
+        try:
+            summary_index = load_json(state / "personal-summary/current.json")
+            if summary_index.get("schema_version") != INDEX:
+                raise ValueError("invalid current summary index")
+        except (OSError, ValueError):
+            result["unavailable"].append({"reason": "personal_summary_index_unavailable"})
+            result["status"] = "unavailable"
+            return finish(result)
     try:
-        summary_index = load_json(state / "personal-summary/current.json")
-        if summary_index.get("schema_version") != INDEX:
-            raise ValueError("invalid current summary index")
-    except (OSError, ValueError):
-        result["unavailable"].append({"reason": "personal_summary_index_unavailable"})
-        result["status"] = "unavailable"
-        return finish(result)
-    try:
-        db, manifest = open_memory_projection(state)
+        if receipt:
+            db, manifest = open_memory_projection(state, known_generation=receipt["memory_generation"])
+        else:
+            db, manifest = open_memory_projection(state)
     except (OSError, ValueError, sqlite3.Error, ValidationError) as exc:
+        if receipt:
+            result.update(status="unavailable", unavailable=[{"reason": "historical_generation_unavailable"}])
+            return finish(result)
         result["coverage"]["degraded"] = "memory_projection_unavailable"
         result["coverage"]["projection_error"] = type(exc).__name__
         return finish(_fallback_exact(state, summary_index, keys, ids, result, lifecycle, view, cutoff,
                                source_id, unit_id, question_id, unlocked_question_ids, max_bytes))
     try:
+        if receipt:
+            try:
+                consistent_time = _time(manifest["created_at"], end_of_day=True) <= _time(receipt["ready_at"], end_of_day=True)
+            except (KeyError, TypeError, ValueError, AttributeError):
+                consistent_time = False
+            if receipt.get("summary_index_sha256") != manifest["summary_index_sha256"] or not consistent_time:
+                result.update(status="unavailable", unavailable=[{"reason": "historical_generation_not_bound_to_publication"}])
+                return finish(result)
+            result["coverage"]["publication_ready_at"] = receipt["ready_at"]
         result["generation"] = manifest["generation"]
         result["summary_index_sha256"] = manifest["summary_index_sha256"]
         result["coverage"]["projection_available"] = True
@@ -439,7 +509,8 @@ def query_memory_context(repo: Path, state: Path, *, keys: list[str] | None = No
                 if exact:
                     result["unavailable"].append({"key": key, "reason": "invalid_or_missing_summary"})
                 continue
-            current = summary_index["routes"].get(key_hash(key))
+            current = ({"sha256": row["summary_sha256"]} if receipt
+                       else summary_index["routes"].get(key_hash(key)))
             if not current or current.get("sha256") != row["summary_sha256"]:
                 result["pending"].append({"key": key, "reason": "summary_generation_pending"})
                 continue
@@ -463,8 +534,11 @@ def query_memory_context(repo: Path, state: Path, *, keys: list[str] | None = No
             question_bound = bool(json.loads(row["question_ids_json"]))
             protected = not bool(row["answer_safe"]) or not is_answer_safe(record, question_bound=question_bound)
             authorized = exact and bool(question_id) and question_id in (unlocked_question_ids or [])
-            if protected and authorized and re.fullmatch(r"Q\d+(?:[-_:].*)?", question_id or "", re.I) and not source_id:
-                result["unavailable"].append({"key": key, "reason": "protected_question_requires_source_scope"})
+            if short_question_without_source:
+                if exact:
+                    reason = ("protected_question_requires_source_scope" if protected and authorized
+                              else "question_requires_source_scope")
+                    result["unavailable"].append({"key": key, "reason": reason})
                 continue
             if protected and not authorized:
                 if exact:
@@ -491,7 +565,7 @@ def query_memory_context(repo: Path, state: Path, *, keys: list[str] | None = No
                     continue
                 scoped = {"source_ids": json.loads(item["source_ids_json"]), "unit_ids": json.loads(item["unit_ids_json"]),
                           "question_ids": json.loads(item["question_ids_json"]), "bindings": json.loads(item["scope_bindings_json"])}
-                if not _scoped(scoped, source_id, unit_id, question_id if protected else None):
+                if not _scoped(scoped, source_id, unit_id, question_id):
                     continue
                 if cutoff:
                     if not item["occurred_at"]:
@@ -502,12 +576,12 @@ def query_memory_context(repo: Path, state: Path, *, keys: list[str] | None = No
                                  "ordinal": item["ordinal"], **scoped})
             if not episodes:
                 if exact:
-                    reason = "no_evidence_as_of" if cutoff else "no_evidence_in_scope" if source_id or unit_id or protected else "no_active_evidence"
+                    reason = "no_evidence_as_of" if cutoff else "no_evidence_in_scope" if source_id or unit_id or question_id else "no_active_evidence"
                     result["unavailable"].append({"key": key, "reason": reason})
                 continue
             eligible += 1
             episodes.sort(key=lambda e: (observation_time(e["occurred_at"]), e["ordinal"]), reverse=True)
-            if not cutoff and not (source_id or unit_id or protected):
+            if not cutoff and not (source_id or unit_id or question_id):
                 selected_id = record.get("latest_episode_id")
                 episodes.sort(key=lambda e: e["episode_id"] == selected_id, reverse=True)
             accepted = lifecycle.get("accepted_summary_hashes", {}).get(key) == row["summary_sha256"]
@@ -536,12 +610,11 @@ def query_memory_context(repo: Path, state: Path, *, keys: list[str] | None = No
             episode_ids = {e["episode_id"] for e in episodes}
             point = {"key": key, "summary_sha256": row["summary_sha256"], "retrieval_method": method,
                      "visibility": "protected" if protected else "answer_free", "audit": audit,
-                     "claims": _claims(state, key, episode_ids, lifecycle, cutoff, not protected),
+                     "claims": [] if receipt else _claims(state, key, episode_ids, lifecycle, cutoff, not protected),
                      "episodes_total": len(all_rows), "episodes_in_scope": len(episodes)}
             active_count = sum(item["episode_id"] not in invalid_ids for item in all_rows)
             scope_filtered = filtered and not (accepted and len(episodes) == active_count)
-            summary_scope_incomplete = bool(cutoff or source_id or unit_id or scope_filtered
-                                            or (protected and len(json.loads(row["question_ids_json"])) > 1))
+            summary_scope_incomplete = bool(cutoff or source_id or unit_id or question_id or scope_filtered)
             point["summary_scope_incomplete"] = summary_scope_incomplete
             if not summary_scope_incomplete and not cutoff:
                 point["teaching_hint"] = record["teaching_hint"]
@@ -688,7 +761,7 @@ def _fallback_exact(state: Path, index: dict[str, Any], keys: list[str], ids: li
         if not is_answer_safe(record):
             result["unavailable"].append({"key": canonical, "reason": "protected_or_scope_unverified"})
             continue
-        if source_id or unit_id:
+        if source_id or unit_id or question_id:
             result["unavailable"].append({"key": canonical, "reason": "scope_index_unavailable"})
             continue
         invalid = set(lifecycle.get("invalidated_episode_ids", []))

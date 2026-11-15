@@ -108,6 +108,112 @@ class MemoryQueryTests(MemoryFixture):
         self.assertEqual(self.query(query="同位语", source_id="OTHER")["status"], "not_found")
         self.assertEqual(self.query(keys=[self.record["key"]], source_id="OTHER")["status"], "no_evidence")
 
+    def test_answer_free_question_observations_still_require_the_requested_question(self):
+        first = self.record["episodes"][0]
+        first["question_id"] = "Q21"
+        sibling = {**first, "episode_id": "SIBLING", "question_id": "Q22", "study_date": "2026-10-01"}
+        other = {**first, "episode_id": "OTHER-ARTICLE", "source_id": "ARTICLE-B", "study_date": "2026-10-02"}
+        self.record["episodes"].extend([sibling, other])
+        self.build()
+        request = {"keys": [self.record["key"]], "question_id": "Q21"}
+        result = self.query(**request, source_id="ARTICLE-A")
+        observation = result["matched"][0]
+        self.assertEqual(observation["latest_observation"]["episode_id"], "E-OLD")
+        self.assertNotIn("teaching_hint", observation)
+        self.assertFalse(self.query(**request)["matched"])
+        self.assertFalse(self.query(keys=request["keys"], source_id="ARTICLE-A", question_id="Q23")["matched"])
+
+    def test_alias_requires_the_captured_article_version_and_never_unlocks_a_range(self):
+        from english_pipeline.sources import resolve_article_source
+        article = self.source.relative_to(self.repo).as_posix()
+        self.source.write_text("# Synthetic passage\nreference_id: EXAM-READING-2014-T2\n\nOnly when the condition holds.\n")
+        raw = self.repo / "raw/articles/exam-reading-corpus/2014/text-2.json"
+        raw.parent.mkdir(parents=True)
+        document = {"schema": "exam_reading_practice_safe_v1", "visibility": "practice_safe",
+                    "article_path": article, "reference_id": "EXAM-READING-2014-T2",
+                    "source_id": "CANONICAL-T2", "passage_paragraphs": ["Only when the condition holds."],
+                    "questions": []}
+        raw.write_text(json.dumps(document))
+        binding = resolve_article_source(self.repo, article)
+        episode = self.record["episodes"][0]
+        episode.update(source_id=binding["reference_id"], source_hash=binding["source_hash"],
+                       question_id="Q26", unit_id="Q26-Q30-FULL-REVIEW")
+        from english_pipeline.util import file_sha256
+        episode["evidence"][0]["sha256"] = file_sha256(self.source)
+        self.build()
+        request = {"keys": [self.record["key"]], "source_id": binding["source_id"]}
+        self.assertEqual(self.query(**request)["matched"][0]["latest_observation"]["episode_id"], "E-OLD")
+        self.assertFalse(self.query(**request, question_id="Q26")["matched"])
+
+        document["passage_paragraphs"] = ["Only when the revised condition holds."]
+        raw.write_text(json.dumps(document))
+        rebuilt = build_memory_projection(self.repo, self.state, keys=[])
+        self.assertEqual(rebuilt["updated_keys"], [self.record["key"]])
+        self.assertFalse(self.query(**request)["matched"])
+        self.assertTrue(self.query(keys=request["keys"], source_id=binding["reference_id"])["matched"])
+
+    def test_claims_require_all_observations_in_the_returned_context(self):
+        second = {**self.record["episodes"][0], "episode_id": "NEW", "study_date": "2026-10-01"}
+        second["first_attempt"] = "A fully retained observation. " * 20
+        self.record["episodes"].append(second)
+        self.build()
+        claim = {"claim_id": "two-observations", "point_key": self.record["key"],
+                 "content": "本判断需要两次真实观察。", "basis": "inference", "status": "candidate",
+                 "evidence_episode_ids": ["E-OLD", "NEW"]}
+        (self.state / "memory/claims.json").write_text(json.dumps({"claims": {"two-observations": claim}}))
+        result = self.query(keys=[self.record["key"]])
+        point = result["matched"][0]
+        self.assertEqual(point["latest_observation"]["episode_id"], "NEW")
+        self.assertEqual(point["claims"], [])
+        self.assertEqual(point["dependent_items_omitted"], 1)
+        result = self.query(keys=[self.record["key"]], view="history", max_bytes=4096)
+        self.assertEqual(result["matched"][0]["claims"][0]["claim_id"], claim["claim_id"])
+        result = self.query(keys=[self.record["key"]], view="history", max_bytes=2800)
+        self.assertEqual(len(result["matched"][0]["episodes"]), 1)
+        self.assertEqual(result["matched"][0]["claims"], [])
+
+    def test_replay_checks_both_occurrence_and_ready_time_without_falling_back(self):
+        publication = "EN-MEMORY-" + "A" * 24
+        with patch("english_pipeline.memory_store.utc_now", return_value="2026-09-02T10:00:00Z"):
+            snapshot = self.build()
+        receipts = self.state / "memory/publications"
+        receipts.mkdir()
+        path = receipts / f"{publication}.json"
+        receipt = {"publication_id": publication, "status": "ready", "pending_component": None,
+                   "ready_at": "2026-09-03T10:00:00Z", "memory_generation": snapshot["generation"],
+                   "summary_index_sha256": snapshot["summary_index_sha256"]}
+        path.write_text(json.dumps(receipt))
+        late_import = {**self.record["episodes"][0], "episode_id": "LATE-IMPORT", "study_date": "2026-08-30"}
+        self.record["episodes"].append(late_import)
+        self.build()
+        kwargs = {"keys": [self.record["key"]], "view": "history", "as_of": "2026-09-10"}
+
+        retrospective = self.query(**kwargs)
+        self.assertIn("LATE-IMPORT", [e["episode_id"] for e in retrospective["matched"][0]["episodes"]])
+        pinned = self.query(**kwargs, known_publication=publication)
+        self.assertEqual(pinned["generation"], snapshot["generation"])
+        self.assertEqual(pinned["coverage"]["publication_ready_at"], receipt["ready_at"])
+        self.assertEqual([e["episode_id"] for e in pinned["matched"][0]["episodes"]], ["E-OLD"])
+        kwargs["as_of"] = "2026-09-02"
+        early = self.query(**kwargs, known_publication=publication)
+        self.assertEqual(early["status"], "unavailable")
+        self.assertFalse(early["matched"])
+        kwargs["as_of"] = "2026-09-10"
+        receipt.pop("ready_at")
+        path.write_text(json.dumps(receipt))
+        self.assertFalse(self.query(**kwargs, known_publication=publication)["matched"])
+        receipt["ready_at"] = "2026-09-03T10:00:00Z"
+        path.write_text(json.dumps(receipt))
+        self.lifecycle(invalidated_episode_ids=["E-OLD"])
+        self.assertFalse(self.query(**kwargs, known_publication=publication)["matched"])
+        self.lifecycle()
+        database = Path(snapshot["database_path"])
+        with database.open("ab") as stream:
+            stream.write(b"unexpected data")
+        damaged = self.query(**kwargs, known_publication=publication)
+        self.assertEqual(damaged["unavailable"], [{"reason": "historical_generation_unavailable"}])
+        self.assertFalse(damaged["matched"])
+
     def test_protected_never_retrieved_by_natural_or_external_candidates(self):
         self.record["visibility"] = "protected"
         self.record["teaching_hint"] = "正确答案是B。PRIVATE_ONLY"

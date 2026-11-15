@@ -24,6 +24,7 @@ def add_memory_commands(subparsers: Any, *, parents: list[argparse.ArgumentParse
     query.add_argument("--unit-id")
     query.add_argument("--view", choices=("teaching", "history", "audit"), default="teaching")
     query.add_argument("--as-of", help="Occurred-date cutoff, interpreted using currently accepted evidence.")
+    query.add_argument("--known-publication", help="Pin an exact ready English publication for a history/audit replay with --as-of.")
     query.add_argument("--max-bytes", type=int)
     query.add_argument("--question-id")
     query.add_argument("--unlocked-question-id", action="append", default=[])
@@ -71,7 +72,8 @@ def run_memory_command(args: argparse.Namespace) -> dict[str, Any]:
         result = query_memory_context(repo, state, keys=args.key, ids=args.id, query=args.query,
             source_id=args.source_id, unit_id=args.unit_id, view=args.view, as_of=args.as_of,
             max_bytes=max(512, maximum - 384), question_id=args.question_id,
-            unlocked_question_ids=args.unlocked_question_id)
+            unlocked_question_ids=args.unlocked_question_id,
+            known_publication=getattr(args, "known_publication", None))
         result["backend"] = diagnostic
         return _budget(result, maximum)
 
