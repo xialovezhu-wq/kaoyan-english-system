@@ -5,3 +5,7 @@ The intensive-reading skill uses the bounded native memory reader described in [
 The Capture, local intake, web bundle, web return and vocabulary export entrypoints retain their existing input and ownership contracts. The publication receipt gains an optional ready timestamp for future historical replay. Existing receipts and data need no migration.
 
 The on-device installed wrapper ran the current and isolated candidate implementations on the same verified English inputs. Runtime and installation stayed on the production generation pending the complete teaching check.
+
+## Formal integration（2026-11-15.3）
+
+The deployed English skill and native writer share the exact formal review receipt contract. The public export preserves its existing route and adds a configurable verified cold destination for formal model ledgers. On the native installation, the authoring entrypoint supplies the advisory receipt before the existing reviewer and writer finish the transaction.

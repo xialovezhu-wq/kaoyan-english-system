@@ -22,3 +22,15 @@ python3 -m unittest tests.english_pipeline.test_memory_query tests.english_pipel
 ```
 
 Baseline `4809ca08ce97a9ed4c3e2f5f4143973439188cdd`. Tested implementation `673e2f3dbc7bc91d2d13d5815074fd28dcd17b43`. The per-case inputs and outputs are private.
+
+## Formal integration and local activation（2026-11-15.3）
+
+Ten held-out cases each ran three independent completions on the same `gpt-6.1-sol` model and max effort. All three sets scored 10/10 against a frozen rubric and the actual supplied sources. The candidate removed two wrong-unit observations from the retrieved context.
+
+| Input | Correct | End-to-end p50 / p95, seconds |
+|---|---:|---:|
+| Current prompt | 10/10 | 30.28 / 66.70 |
+| Current prompt and v6 context | 10/10 | 35.02 / 94.71 |
+| Current prompt and v7 context | 10/10 | 39.76 / 58.74 |
+
+Both budgets were held equal across arms within each case. The first two cases completed at 4096 output tokens. After all three arms of a subsequent case hit the same cap, the remaining cases ran with 8192. A matched-disk wrapper replay produced p95 141.87 ms and 145.09 ms. One additional completion used the actual installed v7 reader after activation. The native integration passed 149 focused tests, and the public export passed 37.
