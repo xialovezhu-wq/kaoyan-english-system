@@ -65,6 +65,8 @@ teaching_hint 优先写最近能改变讲解的事实：已经读对什么、仍
 - `memory_claims`：每项含稳定 `claim_id`、`point_key`、`content`、`basis`、`status`、`evidence_episode_ids`，可含 `valid_from`／`valid_to`。basis 为 user_explicit、observed 或 inference；status 为 candidate 或 confirmed，inference 不能使用 confirmed。证据必须属于该点并能回到真实用户原件，时间依据不明则省略。
 - `memory_corrections`：每项含稳定 `correction_id`、`action`、`reason`、`evidence_episode_ids`，并通过 `target_claim_ids`／`target_episode_ids` 指向实际旧对象。action 为 retract 或 supersede；supersede 还需 `replacement_claim_id`，retract 不带替代项。替代结论不能依赖正在撤回的 episode。
 
+supersede 若直接或经 episode 依赖使 confirmed 判断失效，替代项须为 confirmed 且有 observed 或 user_explicit 依据。证据只支持 candidate 时可单独保留候选，确认项保持有效。独立有据的 retract 继续沿原依赖生效，重试沿用原有回执。
+
 这两类字段只接受已验证的正式回执或明确原始资料复审依据，bootstrap 不授予新的判断／更正权限。同 ID 不同内容失败关闭；重新措辞也不能悄悄覆盖已发布判断。旧 episode 撤回的是作为派生判断依据的有效性，原始学习记录仍保留。
 
 来源／事件到当前摘要的反向依赖由确定性投影建立。更正后先停止使用受影响的旧结论，再更新相关摘要、受管理知识点页面与索引；不删除原始事件、旧摘要对象或原日期。手写正文不属于受管理更新范围，检索相似也不直接产生跨文章“同一种错误”的关系。

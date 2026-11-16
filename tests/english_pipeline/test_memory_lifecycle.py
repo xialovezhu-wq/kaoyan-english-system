@@ -220,6 +220,52 @@ class MemoryLifecycleTests(unittest.TestCase):
             self.publish_review({"schema_version": SCHEMA, "records": [self.record], "memory_corrections": corrections})
         self.assertEqual(before, (self.state / "personal-summary/current.json").read_bytes())
 
+
+    def test_candidate_cannot_supersede_confirmed_claim_or_its_source_episode(self):
+        from english_pipeline.memory_query import _claims
+
+        first = copy.deepcopy(self.record)
+        first["episodes"].append({**self.episode("child", 0), "source_episode_id": "e1"})
+        old = {"claim_id": "claim:old", "point_key": first["key"], "content": "Confirmed observation",
+               "basis": "observed", "status": "confirmed", "evidence_episode_ids": ["child"]}
+        self.publish_review({"schema_version": SCHEMA, "records": [first], "memory_claims": [old]})
+        revised = copy.deepcopy(first)
+        revised["episodes"].append(self.episode("e2", 1, "2026-11-02"))
+        candidate = {**old, "claim_id": "claim:pending", "content": "Candidate interpretation",
+                     "basis": "inference", "status": "candidate", "evidence_episode_ids": ["e2"]}
+        candidate_doc = {"schema_version": SCHEMA, "records": [revised], "memory_claims": [candidate]}
+        claims_path = self.state / "memory/claims.json"
+        watched = [claims_path, self.state / "memory/lifecycle.json", self.state / "personal-summary/current.json"]
+        before = [p.read_bytes() for p in watched]
+        withdrawal = {"correction_id": "fix:withdraw", "action": "retract", "target_episode_ids": ["e1"],
+                      "reason": "Verified independent grounds for withdrawal", "evidence_episode_ids": ["e2"]}
+
+        for target in ({"target_claim_ids": ["claim:old"]}, {"target_episode_ids": ["e1"]}):
+            correction = {"correction_id": "fix:replace", "action": "supersede", **target,
+                          "replacement_claim_id": "claim:pending", "reason": "Synthetic boundary",
+                          "evidence_episode_ids": ["e2"]}
+            with self.subTest(target=target):
+                with self.assertRaisesRegex(ValidationError, "confirmed non-inference replacement"):
+                    self.publish_review({**candidate_doc, "memory_corrections": [correction]})
+                self.assertEqual([p.read_bytes() for p in watched], before)
+
+        self.publish_review(candidate_doc)
+
+        def visible():
+            rows = json.loads(claims_path.read_bytes())["claims"]
+            life = read_lifecycle(self.state)
+            return {r["claim_id"]: r["status"] for r in _claims(
+                rows, first["key"], {"e1", "child", "e2"}, life, None, True)}
+
+        self.assertEqual(visible(), {"claim:old": "confirmed", "claim:pending": "candidate"})
+        retract_doc = {"schema_version": SCHEMA, "records": [revised], "memory_corrections": [withdrawal]}
+        self.publish_review(retract_doc)
+        self.assertEqual(read_lifecycle(self.state)["invalidated_episode_ids"], ["child", "e1"])
+        self.assertEqual(visible(), {"claim:pending": "candidate"})
+        self.publish_review(retract_doc)
+        self.publish_review(candidate_doc)
+        self.assertEqual(visible(), {"claim:pending": "candidate"})
+
     def test_claim_retraction_also_blocks_the_old_unstructured_hint(self):
         claim = {"claim_id": "claim:old-attribution", "point_key": "word:advertise", "content": "旧词形归因",
             "basis": "observed", "status": "confirmed", "evidence_episode_ids": ["e1"]}

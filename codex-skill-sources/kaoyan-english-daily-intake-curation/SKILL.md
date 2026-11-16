@@ -59,6 +59,8 @@ If the root task is not Ultra, use the unchanged orchestrate Skill only when ind
 
 When delegated lookup is useful, follow references/native-luna-read-contract.md. The read leaf returns evidence; the same parent rejects scope/hash drift and decides identity, deduplication, error, mastery, relations and typed actions. No background model or consumer processes the learning package.
 
+正式作者核对[日终合同](references/nightly-curation-contract.md)中的候选和来源覆盖。对显式目标未找到、必要历史未比较或原文条件未送审的关系，按回执定位补读。原件仍不足时留为 typed unresolved。
+
 ## Typed writer workflow
 
 1. Persist and reopen one canonical through-cutoff backlog plan.

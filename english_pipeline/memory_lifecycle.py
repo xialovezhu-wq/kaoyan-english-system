@@ -384,6 +384,18 @@ def _episode_covers_package(repo: Path, state: Path, episode: dict[str, Any], pi
     return False
 
 
+def _episode_withdrawal_closure(episodes, roots):
+    withdrawn = set(roots)
+    if withdrawn:
+        while True:
+            dependents = {eid for eid, owners in episodes.items() if eid not in withdrawn
+                          and any(ep.get("source_episode_id") in withdrawn for _, ep in owners)}
+            if not dependents:
+                break
+            withdrawn.update(dependents)
+    return withdrawn
+
+
 def preflight_summary_memory(repo: Path, state: Path, document: dict[str, Any], records: dict[str, dict[str, Any]], *,
                              formal_receipt: dict[str, Any] | None = None, review: Any = None,
                              bootstrap: bool = False) -> dict[str, Any] | None:
@@ -496,8 +508,15 @@ def preflight_summary_memory(repo: Path, state: Path, document: dict[str, Any], 
         if correction["action"] == "supersede":
             if replacement not in claims or replacement in targets or replacement in invalid_claims:
                 raise ValidationError("replacement claim is missing, invalid, or cyclic")
-            if set(claims[replacement]["evidence_episode_ids"]) & set(target_episodes):
+            withdrawn = _episode_withdrawal_closure(episodes, target_episodes)
+            proposed = claims[replacement]
+            if withdrawn.intersection(proposed["evidence_episode_ids"]):
                 raise ValidationError("replacement depends on an episode being invalidated")
+            if proposed["status"] != "confirmed" or proposed["basis"] not in {"user_explicit", "observed"}:
+                if any(claim["status"] == "confirmed"
+                       and (old_id in targets or withdrawn.intersection(claim["evidence_episode_ids"]))
+                       for old_id, claim in old_claims.items()):
+                    raise ValidationError("supersede pending: confirmed claims require a confirmed non-inference replacement")
         elif replacement is not None:
             raise ValidationError("retraction must not name a replacement")
         if cid in old_corrections:
@@ -509,17 +528,10 @@ def preflight_summary_memory(repo: Path, state: Path, document: dict[str, Any], 
         if cid not in old_corrections:
             invalidated_keys.update(old_claims[x]["point_key"] for x in targets)
             invalidated_keys.update(key for eid in target_episodes for key, _ in episodes[eid])
-    # Refinement retains source_episode_id. Follow that explicit dependency,
-    # rather than trusting similarity or treating a refined copy as new proof.
-    changed = True
-    while changed:
-        changed = False
-        for key, record in all_records.items():
-            for episode in record.get("episodes", []):
-                if episode.get("source_episode_id") in invalid_episodes and episode["episode_id"] not in invalid_episodes:
-                    invalid_episodes.add(episode["episode_id"])
-                    invalidated_keys.add(key)
-                    changed = True
+    # Refinements keep the original episode as an explicit dependency.
+    withdrawn = _episode_withdrawal_closure(episodes, invalid_episodes)
+    invalidated_keys.update(key for eid in withdrawn - invalid_episodes for key, _ in episodes[eid])
+    invalid_episodes = withdrawn
     # Propagate an episode withdrawal into all dependent derived claims.
     invalid_claims.update(cid for cid, claim in claims.items() if set(claim["evidence_episode_ids"]) & invalid_episodes)
     invalidated_keys.update(claims[cid]["point_key"] for cid in invalid_claims - previously_invalid_claims if cid in claims)
