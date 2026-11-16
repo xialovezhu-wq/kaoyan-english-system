@@ -69,6 +69,17 @@ def _scoped(episode: dict[str, Any], source_id: str | None, unit_id: str | None,
     return True
 
 
+def _episode_scope(row: sqlite3.Row) -> dict[str, Any]:
+    return {"source_ids": json.loads(row["source_ids_json"]), "unit_ids": json.loads(row["unit_ids_json"]),
+            "question_ids": json.loads(row["question_ids_json"]), "bindings": json.loads(row["scope_bindings_json"])}
+
+
+def _episode_audits(db: sqlite3.Connection, key: str, identity: str) -> list[str]:
+    return [row[0] for row in db.execute(
+        "SELECT s.audit_json FROM sources s JOIN dependencies d ON d.source_key=s.source_key "
+        "WHERE d.point_key=? AND d.episode_id=? ORDER BY s.source_key", (key, identity))]
+
+
 def _episode_public(episode: dict[str, Any], cutoff: datetime | None = None) -> dict[str, Any]:
     allowed = ("episode_id", "study_date", "observed_at", "last_observed_at", "first_attempt", "correction",
                "later_observation", "hint_dependence", "reasoning_status", "observation_status", "next_action",
@@ -124,18 +135,16 @@ def _public_ref(audit: dict[str, Any], repo: Path, *, check_access: bool = True)
             **{name: audit["reference"][name] for name in allowed if name in audit.get("reference", {})}}
 
 
-def _claims(state: Path, key: str, episode_ids: set[str], lifecycle: dict[str, Any],
-            as_of: datetime | None, safe: bool) -> list[dict[str, Any]]:
-    path = state / "memory/claims.json"
-    if not path.exists():
-        return []
+def _load_claims(state: Path) -> dict[str, Any]:
     try:
-        document = load_json(path)
-        claims = document.get("claims", {})
-        if not isinstance(claims, dict):
-            return []
+        claims = load_json(state / "memory/claims.json").get("claims", {})
     except (OSError, ValueError):
-        return []
+        return {}
+    return claims if isinstance(claims, dict) else {}
+
+
+def _claims(claims: dict[str, Any], key: str, episode_ids: set[str], lifecycle: dict[str, Any],
+            as_of: datetime | None, safe: bool) -> list[dict[str, Any]]:
     target_time = as_of or datetime.now(timezone.utc)
     invalid = set(lifecycle.get("invalidated_claim_ids", []))
     result = []
@@ -399,7 +408,12 @@ def query_memory_context(repo: Path, state: Path, *, keys: list[str] | None = No
         except (OSError, ValueError, TypeError, AttributeError, ValidationError):
             result.update(status="unavailable", unavailable=[{"reason": "historical_publication_unavailable"}])
             return _fit(result, max_bytes)
-    def finish(payload: dict[str, Any]) -> dict[str, Any]:
+    def finish(payload: dict[str, Any], *, check_state: bool = False) -> dict[str, Any]:
+        if check_state and _state_identity(state) != initial_state_identity:
+            payload["matched"] = [point for point in payload["matched"] if point.get("role") == "explicit_preference"]
+            payload["pending"].append({"reason": "memory_state_changed_during_query"})
+            payload["coverage"]["points_returned"] = len(payload["matched"])
+            payload["status"] = "partial" if payload["matched"] else "pending"
         # Denied identities can themselves reveal correctness (for example a
         # protected "correct-choice" point). Echo only caller-known identities.
         for field in ("unavailable", "pending", "conflicts"):
@@ -431,28 +445,31 @@ def query_memory_context(repo: Path, state: Path, *, keys: list[str] | None = No
         if not result["matched"]:
             result["status"] = "unavailable" if result["unavailable"] else "not_found"
         return finish(result)
-    if receipt is None:
-        try:
-            summary_index = load_json(state / "personal-summary/current.json")
-            if summary_index.get("schema_version") != INDEX:
-                raise ValueError("invalid current summary index")
-        except (OSError, ValueError):
-            result["unavailable"].append({"reason": "personal_summary_index_unavailable"})
-            result["status"] = "unavailable"
-            return finish(result)
     try:
-        if receipt:
-            db, manifest = open_memory_projection(state, known_generation=receipt["memory_generation"])
-        else:
-            db, manifest = open_memory_projection(state)
+        summary_index = load_json(state / "personal-summary/current.json")
+        if summary_index.get("schema_version") != INDEX:
+            raise ValueError("invalid current summary index")
+    except (OSError, ValueError):
+        result["unavailable"].append({"reason": "personal_summary_index_unavailable"})
+        result["status"] = "unavailable"
+        return finish(result)
+    try:
+        db, manifest = open_memory_projection(state, known_generation=receipt["memory_generation"] if receipt else None)
     except (OSError, ValueError, sqlite3.Error, ValidationError) as exc:
         if receipt:
             result.update(status="unavailable", unavailable=[{"reason": "historical_generation_unavailable"}])
             return finish(result)
         result["coverage"]["degraded"] = "memory_projection_unavailable"
         result["coverage"]["projection_error"] = type(exc).__name__
+        if (state / "memory/current.json").exists() or (state / "memory/generations").is_dir():
+            # A plain summary cannot carry a previously published source or visibility veto.
+            result["status"] = "partial" if result["matched"] else "unavailable"
+            result["unavailable"].append({"reason": "published_source_audit_unavailable"})
+            result["coverage"]["points_returned"] = len(result["matched"])
+            return finish(result)
         return finish(_fallback_exact(state, summary_index, keys, ids, result, lifecycle, view, cutoff,
-                               source_id, unit_id, question_id, unlocked_question_ids, max_bytes))
+                               source_id, unit_id, question_id, unlocked_question_ids, max_bytes), check_state=True)
+    live_db = None
     try:
         if receipt:
             try:
@@ -461,6 +478,11 @@ def query_memory_context(repo: Path, state: Path, *, keys: list[str] | None = No
                 consistent_time = False
             if receipt.get("summary_index_sha256") != manifest["summary_index_sha256"] or not consistent_time:
                 result.update(status="unavailable", unavailable=[{"reason": "historical_generation_not_bound_to_publication"}])
+                return finish(result)
+            try:
+                live_db, _ = open_memory_projection(state)
+            except (OSError, ValueError, sqlite3.Error, ValidationError):
+                result.update(status="unavailable", unavailable=[{"reason": "published_source_audit_unavailable"}])
                 return finish(result)
             result["coverage"]["publication_ready_at"] = receipt["ready_at"]
         result["generation"] = manifest["generation"]
@@ -496,6 +518,7 @@ def query_memory_context(repo: Path, state: Path, *, keys: list[str] | None = No
                 continue
         candidates.extend(item for item in native if item[2] != "exact_label_candidate")
         seen, eligible = set(), 0
+        claims = None
         for key, exact, method in candidates:
             if key in seen:
                 continue
@@ -550,6 +573,15 @@ def query_memory_context(repo: Path, state: Path, *, keys: list[str] | None = No
             if key in lifecycle.get("invalidated_summary_keys", []) and lifecycle.get("accepted_summary_hashes", {}).get(key) != row["summary_sha256"]:
                 result["pending"].append({"key": key, "reason": "invalidated_summary_requires_refresh"})
                 continue
+            if live_db is not None:
+                live_point = live_db.execute("SELECT summary_sha256,answer_safe,audit_json FROM points WHERE point_key=?",
+                                             (key,)).fetchone()
+                live_route = summary_index["routes"].get(key_hash(key), {})
+                if (live_point is None or live_point["summary_sha256"] != live_route.get("sha256")
+                        or json.loads(live_point["audit_json"])["status"] in {"conflict", "invalid_summary"}
+                        or (row["answer_safe"] and not live_point["answer_safe"])):
+                    result["unavailable"].append({"key": key, "reason": "historical_evidence_no_longer_verified"})
+                    continue
             episodes = []
             # Select identity and scope first. A teaching read fetches only the
             # newest eligible episode body and its direct locators after filtering.
@@ -563,8 +595,7 @@ def query_memory_context(repo: Path, state: Path, *, keys: list[str] | None = No
                     continue
                 if item["episode_id"] in invalid_ids:
                     continue
-                scoped = {"source_ids": json.loads(item["source_ids_json"]), "unit_ids": json.loads(item["unit_ids_json"]),
-                          "question_ids": json.loads(item["question_ids_json"]), "bindings": json.loads(item["scope_bindings_json"])}
+                scoped = _episode_scope(item)
                 if not _scoped(scoped, source_id, unit_id, question_id):
                     continue
                 if cutoff:
@@ -590,27 +621,39 @@ def query_memory_context(repo: Path, state: Path, *, keys: list[str] | None = No
                 continue
             filtered = len(episodes) != len(all_rows)
             selected_episodes = episodes[:1] if teaching_only else episodes
+            history_allowed = True
             for episode in selected_episodes:
                 identity = episode["episode_id"]
+                audits = _episode_audits(db, key, identity)
+                if live_db is not None:
+                    live_episode = live_db.execute(
+                        "SELECT source_ids_json,unit_ids_json,question_ids_json,scope_bindings_json "
+                        "FROM episodes WHERE point_key=? AND episode_id=?", (key, identity)).fetchone()
+                    if (live_episode is None or not _scoped(_episode_scope(live_episode), source_id, unit_id, question_id)
+                            or audits != _episode_audits(live_db, key, identity)):
+                        history_allowed = False
+                        break
                 raw = json.loads(db.execute("SELECT episode_json FROM episodes WHERE point_key=? AND episode_id=?",
                                             (key, identity)).fetchone()[0])
                 episode["raw"] = raw
-                sources = []
+                sources = [json.loads(audit) for audit in audits]
                 direct_keys = {object_sha256(ref) for ref in raw.get("evidence", []) if isinstance(ref, dict)}
-                audits = [json.loads(s[0]) for s in db.execute(
-                    "SELECT s.audit_json FROM sources s JOIN dependencies d ON d.source_key=s.source_key WHERE d.point_key=? AND d.episode_id=? ORDER BY s.source_key",
-                    (key, identity))]
                 if view != "audit":
-                    audits = [a for a in audits if a["source_key"] in direct_keys] or audits
-                sources = [_public_ref(source, repo, check_access=not teaching_only) for source in audits]
-                episode["sources"] = sources
+                    sources = [a for a in sources if a["source_key"] in direct_keys] or sources
+                episode["sources"] = [_public_ref(source, repo, check_access=not teaching_only) for source in sources]
+            if not history_allowed:
+                result["unavailable"].append({"key": key, "reason": "historical_evidence_no_longer_verified"})
+                continue
             if not protected and any(contains_answer_signal(e["raw"]) for e in selected_episodes):
                 result["unavailable"].append({"key": key, "reason": "answer_visibility_conflict"})
                 continue
             episode_ids = {e["episode_id"] for e in episodes}
+            # Reuse the first eligible point's parse within this state-checked request.
+            if receipt is None and claims is None:
+                claims = _load_claims(state)
             point = {"key": key, "summary_sha256": row["summary_sha256"], "retrieval_method": method,
                      "visibility": "protected" if protected else "answer_free", "audit": audit,
-                     "claims": [] if receipt else _claims(state, key, episode_ids, lifecycle, cutoff, not protected),
+                     "claims": [] if claims is None else _claims(claims, key, episode_ids, lifecycle, cutoff, not protected),
                      "episodes_total": len(all_rows), "episodes_in_scope": len(episodes)}
             active_count = sum(item["episode_id"] not in invalid_ids for item in all_rows)
             scope_filtered = filtered and not (accepted and len(episodes) == active_count)
@@ -644,10 +687,6 @@ def query_memory_context(repo: Path, state: Path, *, keys: list[str] | None = No
                                     "source_integrity_checked_at_build": manifest.get("source_audit_performed", False),
                                     "original_sources_reopened": False,
                                     "source_graph_expansion": "transitive" if view == "audit" else "direct_references; audit_view_expands_ancestors"})
-        if _state_identity(state) != initial_state_identity:
-            result["matched"] = [point for point in result["matched"] if point.get("role") == "explicit_preference"]
-            result["pending"].append({"reason": "memory_state_changed_during_query"})
-            result["coverage"]["points_returned"] = len(result["matched"])
         if result["matched"]:
             result["status"] = "partial" if any(result[k] for k in ("misses", "unavailable", "pending", "conflicts")) else "ready"
         elif result["pending"]:
@@ -660,8 +699,10 @@ def query_memory_context(repo: Path, state: Path, *, keys: list[str] | None = No
             result["status"] = "unavailable"
         else:
             result["status"] = "not_found"
-        return finish(result)
+        return finish(result, check_state=True)
     finally:
+        if live_db is not None:
+            live_db.close()
         db.close()
 
 

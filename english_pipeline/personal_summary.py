@@ -587,7 +587,7 @@ def query_personal_summary(state: Path, *, keys: list[str], question_review: boo
             if record["visibility"] == "answer_free" and point_answer_risk(record):
                 result["unavailable"].append({"key": key, "reason": "protected_use_scoped_memory_query"})
                 continue
-            if enabled and (state / "memory/current.json").is_file():
+            if enabled and ((state / "memory/current.json").exists() or (state / "memory/generations").is_dir()):
                 # The legacy response still has its old shape, but cannot
                 # bypass scoped/inherited protection or a source conflict.
                 from .memory_store import open_memory_projection

@@ -16,7 +16,7 @@
 python3 scripts/english_learning_pipeline.py publish-personal-summaries --input-json POINTS.json --writer-receipt WRITER_RECEIPT.json
 ```
 
-POINTS.json 根对象是 `{"schema_version":"english_point_personal_summary_v1","records":[...]}`。发布前核验每个 evidence 的本地原件，写内容寻址对象，再原子更新索引。旧 episode 保留，分包只合并本批点；同 episode_id 的矛盾内容拒绝覆盖。正式收尾绑定本次个人摘要与记忆索引的版本和覆盖范围；任一步失败只补缺失阶段，不重放正式 apply。没有相关变化时由原生收尾记录有依据的 no-op，不能用空稿伪造完成。
+POINTS.json 根对象是 `{"schema_version":"english_point_personal_summary_v1","records":[...]}`。发布前核验每个 evidence 的本地原件，写内容寻址对象，再原子更新索引。旧 episode 保留，分包只合并本批点；同 episode_id 的矛盾内容拒绝覆盖。正式收尾绑定本次个人摘要与记忆索引的版本和覆盖范围；任一步失败只补缺失阶段，不重放正式 apply。保留现行生命周期和受影响来源的审计；旧代际留作授权历史核查，不能代替现行失效门禁。没有相关变化时由原生收尾记录有依据的 no-op，不能用空稿伪造完成。
 
 记忆层启用后的正式提交，POINTS 顶层 `coverage` 必须逐项说明本次 completed package 的摘要覆盖：每项为 `package_id`、`disposition`、`keys` 及必要的 `reason`。`covered` 的 keys 必须在本份 records 中明确发布；确无相关点才用 `no_relevant_points`、空 keys 和具体理由。只有经过正式回执核验的全无相关点覆盖，才允许 records 为空。needs_user、failed 或其他包不能借此宣告完成。
 

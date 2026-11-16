@@ -5,7 +5,7 @@ description: 根据英语当前原句和真实作答定位断点，按单词、�
 
 # 英语精读
 
-保留用户实际选中的 DeepSeek V4.1 Flash 及其供应商和推理档位，不换模型、不另开任务。普通学习问答以提交到完整必要正文可见 10–20 秒为目标，超过 20 秒未达标；未经真实回合计时不得称达标。进度提示、首字或本地脚本耗时不能代替完整回复。
+沿用用户当前会话选择的模型、供应商和推理档位，不换模型、不另开任务。普通学习问答以提交到完整必要正文可见 10–20 秒为目标，超过 20 秒未达标；未经真实回合计时不得称达标。进度提示、首字或本地脚本耗时不能代替完整回复。
 
 ## 先诊断，再按点读取
 
@@ -17,7 +17,7 @@ description: 根据英语当前原句和真实作答定位断点，按单词、�
 python3 scripts/english_learning_pipeline.py query-memory-context --view teaching --key 'word:advertiser' --max-bytes 6144
 ```
 
-通常查询 1–3 个真正影响当前讲法的键，最多 8 个。同单元已读且适用可复用。只有规范键未知时才用一次独立 `--query`；未命中、待更新、来源冲突或超预算时，按当前作答继续。历史和明确维护使用 `--view history`／`audit`。原 `query-personal-summary` 仅为兼容读取，`query-learning-context` 用于明确需要的正式词库与学习事件。受保护记录使用精确键或 ID 及解锁题号，短题号另绑定文章来源。详见[统一记忆读取合同](references/memory-context.md)。
+通常查询 1–3 个真正影响当前讲法的键，最多 8 个。同单元已读且适用可复用。只有规范键未知时才用一次独立 `--query`；未命中、待更新、来源冲突或超预算时，按当前作答继续。曾发布的索引及其来源审计无法验证时，只按当前原句和作答讲解。历史和明确维护使用 `--view history`／`audit`。原 `query-personal-summary` 仅为兼容读取，`query-learning-context` 用于明确需要的正式词库与学习事件。受保护记录使用精确键或 ID 及解锁题号，短题号另绑定文章来源。详见[统一记忆读取合同](references/memory-context.md)。
 
 ## 实时讲解
 
@@ -42,7 +42,7 @@ python3 scripts/english_learning_pipeline.py query-memory-context --view teachin
 
 保存包含该单元原文、必要背景、全部真实用户/助手对话、初次理解、每次纠正与用户后续复述、原图附件；不能只存最后一问一答或用摘要代替原话。先前已封旧包保持原样；新增对话单独封补充包并关联旧包，不重复创建旧学习记录。
 
-使用 `scripts/capture_current_english.py` 一次读取原始会话并封独立单元、输出 ZIP；缺少起点只执行一次 prepare。讲解中保留本单元起点及已知来源，保存时不查源码/help/历史、不手抄 JSON、不取 previous token、不修旧 frontier。程序保持 `source.review_route="web"`，同单元重试复用原包，后到补充只封新消息并关联旧包。
+使用 `scripts/capture_current_english.py` 一次读取原始会话并封独立单元、输出 ZIP；缺少起点只执行一次 prepare。讲解中保留本单元起点及已知来源，保存时不查源码/help/历史、不手抄 JSON、不取 previous token、不修旧 frontier。同单元重试复用原包，后到补充只封新消息并关联旧包。
 
 拿到成功回执和 ZIP 即结束，不逐文件复查、不单独 segment-zip、不刷新看板。失败保留原始证据和精确边界，按缺项重试本单元；旧包故障不阻塞新单元或教学。以真实保存请求到完整成功回复 10–20 秒为目标，未经新回合验证不宣称已达标。
 
@@ -50,6 +50,6 @@ Capture 只记录事实，`formal_write_count=0`、`background_processing=none`�
 
 ## 其他入口
 
-明确正式入库转 kaoyan-english-daily-intake-curation；网页返回转 kaoyan-english-web-return。整篇学习结束需要网页整理时，先按授权封存尚未保存的完整单元，再转 kaoyan-english-web-bundle。导出词表按 kaoyan-english-vocab-export 的正式依据执行。
+明确正式入库转 kaoyan-english-daily-intake-curation；网页返回转 kaoyan-english-web-return。仅在用户明确要求网页外发时调用 kaoyan-english-web-bundle。需要补封完整单元时沿用原保存授权。导出词表按 kaoyan-english-vocab-export 的正式依据执行。
 
 核对用户当前完整作答确实正确时，已可用的官方 Codex confetti 工具可按既有偏好静默调用一次；不重复探测，不为庆祝创建 Capture，不等同掌握。

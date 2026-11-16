@@ -4,11 +4,12 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+from english_pipeline import memory_query
 from english_pipeline.errors import ValidationError
 from english_pipeline.memory_query import query_memory_context
-from english_pipeline.memory_store import build_memory_projection
+from english_pipeline.memory_store import build_memory_projection, source_dependents
 from english_pipeline.personal_summary import query_personal_summary
-from english_pipeline.util import canonical_bytes
+from english_pipeline.util import canonical_bytes, file_sha256
 from tests.english_pipeline.test_memory_store import MemoryFixture
 
 
@@ -317,6 +318,63 @@ class MemoryQueryTests(MemoryFixture):
         self.assertEqual([c["claim_id"] for c in result["matched"][0]["claims"]], ["good"])
         self.assertEqual(result["matched"][0]["claims"][0]["status"], "candidate")
 
+    def test_claims_load_once_per_request_only_for_eligible_points(self):
+        records = []
+        for i in range(8):
+            key = f"word:w{i}"
+            self.raw_publish({
+                "key": key, "visibility": "answer_free", "teaching_hint": "句义",
+                "episodes": [{"episode_id": f"E{i}", "study_date": "2026-09-01",
+                              "correction": "辨义", "evidence": [{"path": "articles/record.md",
+                              "sha256": self.record["episodes"][0]["evidence"][0]["sha256"], "locator": "lines/1-2"}]}],
+            })
+            records.append(key)
+        build_memory_projection(self.repo, self.state)
+        path = self.state / "memory/claims.json"
+
+        def save(text):
+            claims = {
+                str(i): {"claim_id": str(i), "point_key": key, "status": "confirmed", "content": text,
+                         "evidence_episode_ids": [f"E{i}"]}
+                for i, key in enumerate(records)
+            }
+            path.write_bytes(canonical_bytes({"claims": claims}))
+
+        save("old")
+        for size in (1, 3, 8):
+            with self.subTest(size=size), patch.object(memory_query, "load_json", wraps=memory_query.load_json) as read:
+                result = self.query(keys=records[:size], max_bytes=6144)
+                reads = [call for call in read.call_args_list if call.args == (path,)]
+                self.assertEqual(len(reads), 1)
+                self.assertEqual(result["coverage"]["points_in_scope"], size)
+                returned = len(result["matched"])
+                if size == 8:
+                    self.assertEqual(result["status"], "partial")
+                    self.assertTrue(result["coverage"]["budget_limited"])
+                else:
+                    self.assertEqual(returned, size)
+                self.assertGreater(returned, 0)
+                self.assertEqual([p["claims"][0]["claim_id"] for p in result["matched"]], [str(i) for i in range(returned)])
+                self.assertLessEqual(len(canonical_bytes(result)), 6144)
+
+        with patch.object(memory_query, "load_json", wraps=memory_query.load_json) as read:
+            self.assertFalse(self.query(keys=["word:unknown"])["matched"])
+            self.assertFalse(self.query(keys=records[:1], source_id="OTHER-ARTICLE")["matched"])
+            self.assertFalse(any(call.args == (path,) for call in read.call_args_list))
+
+        original = memory_query._claims
+
+        def replace_after_read(*args, **kwargs):
+            if args[1] == records[0]:
+                save("new")
+            return original(*args, **kwargs)
+
+        with patch.object(memory_query, "_claims", side_effect=replace_after_read):
+            raced = self.query(keys=records[:3])
+        self.assertEqual(raced["matched"], [])
+        self.assertEqual(raced["pending"], [{"reason": "memory_state_changed_during_query"}])
+        self.assertEqual(self.query(keys=records[:1])["matched"][0]["claims"][0]["content"], "new")
+
     def test_whole_envelope_budget_and_complete_observations(self):
         self.record["episodes"][0]["later_observation"] = "提示后复述；尚未独立验证。" * 80
         self.build()
@@ -336,6 +394,90 @@ class MemoryQueryTests(MemoryFixture):
         self.assertFalse((self.state / "memory").exists())
         self.assertEqual(before, {p: p.read_bytes() for p in self.repo.rglob("*") if p.is_file()})
 
+    def test_legacy_fallback_discards_observations_if_retracted_during_read(self):
+        from english_pipeline import memory_query
+
+        self.publish()
+        key = self.record["key"]
+        original = memory_query._read_record
+
+        def retract(*args, **kwargs):
+            self.lifecycle(invalidated_episode_ids=["E-OLD"])
+            return original(*args, **kwargs)
+
+        with patch.object(memory_query, "_read_record", side_effect=retract):
+            result = self.query(keys=[key])
+        self.assertEqual(result["status"], "pending")
+        self.assertEqual(result["matched"], [])
+        self.assertIn({"reason": "memory_state_changed_during_query"}, result["pending"])
+        self.assertFalse(self.query(keys=[key])["matched"])
+
+    def test_pinned_history_and_corrupt_projection_respect_current_source_audit(self):
+        other_source = self.source.with_name("other.md")
+        other_source.write_text("Independent evidence.\n", encoding="utf-8")
+        other = copy.deepcopy(self.record)
+        other.update(key="syntax:contrast", aliases=[])
+        other["episodes"][0]["evidence"] = [{"path": "articles/other.md", "sha256": file_sha256(other_source),
+                                             "locator": "lines/1-1"}]
+        self.raw_publish(other)
+        with patch("english_pipeline.memory_store.utc_now", return_value="2026-09-02T10:00:00Z"):
+            snapshot = self.build()
+        publication = "EN-MEMORY-" + "B" * 24
+        receipts = self.state / "memory/publications"
+        receipts.mkdir()
+        (receipts / f"{publication}.json").write_bytes(canonical_bytes({
+            "publication_id": publication, "status": "ready", "pending_component": None,
+            "ready_at": "2026-09-03T10:00:00Z", "memory_generation": snapshot["generation"],
+            "summary_index_sha256": snapshot["summary_index_sha256"],
+        }))
+        keys = [self.record["key"], other["key"]]
+        request = {"keys": keys, "view": "history", "as_of": "2026-09-10", "known_publication": publication}
+        self.assertEqual([point["key"] for point in self.query(**request)["matched"]], keys)
+
+        self.source.write_text("A different version.\n", encoding="utf-8")
+        protected_hash = file_sha256(self.source)
+        impacted = source_dependents(self.repo, self.state, [self.source])
+        self.assertEqual(impacted, keys[:1])
+        rebuilt = build_memory_projection(self.repo, self.state, keys=impacted)
+        self.assertEqual(rebuilt["updated_keys"], keys[:1])
+        self.assertEqual(file_sha256(self.source), protected_hash)
+        self.assertEqual(file_sha256(other_source), other["episodes"][0]["evidence"][0]["sha256"])
+
+        history = self.query(**request)
+        self.assertEqual([point["key"] for point in history["matched"]], keys[1:])
+        self.assertIn({"key": keys[0], "reason": "historical_evidence_no_longer_verified"}, history["unavailable"])
+        self.assertEqual(self.query(keys=keys[:1])["status"], "conflict")
+
+        Path(rebuilt["database_path"]).write_bytes(b"corrupt index fixture")
+        for request in ({"keys": keys[:1]}, request):
+            result = self.query(**request)
+            self.assertEqual(result["unavailable"], [{"reason": "published_source_audit_unavailable"}])
+            self.assertFalse(result["matched"])
+        (self.state / "memory/current.json").unlink()
+        self.assertFalse(self.query(keys=keys[:1])["matched"])
+        (self.state / "memory/enabled.json").write_bytes(canonical_bytes({"enabled": True}))
+        self.assertFalse(query_personal_summary(self.state, keys=keys[:1], view="teaching")["matched"])
+
+    def test_pinned_history_applies_current_answer_protection(self):
+        with patch("english_pipeline.memory_store.utc_now", return_value="2026-09-02T10:00:00Z"):
+            snapshot = self.build()
+        publication = "EN-MEMORY-" + "C" * 24
+        receipts = self.state / "memory/publications"
+        receipts.mkdir()
+        (receipts / f"{publication}.json").write_bytes(canonical_bytes({
+            "publication_id": publication, "status": "ready", "pending_component": None,
+            "ready_at": "2026-09-03T10:00:00Z", "memory_generation": snapshot["generation"],
+            "summary_index_sha256": snapshot["summary_index_sha256"],
+        }))
+        request = {"keys": [self.record["key"]], "view": "history", "as_of": "2026-09-10",
+                   "known_publication": publication}
+        self.assertTrue(self.query(**request)["matched"])
+
+        self.publish({**self.record, "visibility": "protected"})
+        build_memory_projection(self.repo, self.state)
+        self.assertFalse(self.query(**request)["matched"])
+        self.assertFalse(self.query(**request, question_id="Q21", unlocked_question_ids=["Q21"])["matched"])
+
     def test_query_does_not_read_original_sources(self):
         self.build()
         self.source.unlink()
@@ -344,7 +486,8 @@ class MemoryQueryTests(MemoryFixture):
         self.assertEqual(result["status"], "ready")
         self.assertFalse(result["coverage"]["original_sources_reopened"])
         self.assertEqual(result["matched"][0]["sources"][0]["verification"], "verified_at_build")
-        self.assertEqual(result["matched"][0]["sources"][0]["current_access"], "source_unavailable_now")
+        expected = "not_reopened" if self.source.resolve().as_posix().startswith("/Volumes/") else "source_unavailable_now"
+        self.assertEqual(result["matched"][0]["sources"][0]["current_access"], expected)
 
     def test_preference_id_is_not_mastery_and_fits_whole_sections(self):
         path = self.state / "personal-summary/teaching-preferences.md"
