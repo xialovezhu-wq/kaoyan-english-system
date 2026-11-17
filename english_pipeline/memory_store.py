@@ -22,7 +22,7 @@ from typing import Any
 
 from .answer_safety import point_answer_risk
 from .errors import PipelineError, ValidationError
-from .personal_summary import INDEX, SCHEMA, _read_record, key_hash, normalize_key, teaching_header
+from .personal_summary import INDEX, SCHEMA, _read_record, key_hash, normalize_key, select_observations, teaching_header
 from .util import (atomic_write_json, atomic_write_text, canonical_bytes,
                    exclusive_lock, file_sha256, load_json, object_sha256, utc_now)
 
@@ -808,15 +808,18 @@ def build_memory_projection(repo: Path, state: Path, *, keys: list[str] | None =
 
 def _mirror_markdown(record: dict[str, Any], generation: str, scopes: dict[str, Any], summary_sha256: str | None = None) -> str:
     key = record["key"]
+    group, ordered = select_observations(record["episodes"], record)
+    hint = (record["teaching_hint"] if len(group) == 1
+            else "当前观察的先后未确定，待核对原有观察及提示依赖。")
     header = ["---", f"title: {_json(key)}", f"canonical_key: {_json(key)}", "type: english-memory-projection",
               "visibility: answer_free", f"summary_sha256: {_json(summary_sha256 or object_sha256(record))}",
               "locked: true",
               f"source_ids: {_json(scopes['source_ids'])}", f"unit_ids: {_json(scopes['unit_ids'])}",
               "qmd:", "  metadata:", f"    canonical_key: {_json(key)}", "    visibility: answer_free", "---", "",
               f"# {key}", "", "本页是已发布摘要的可重建投影；检索命中不证明本次错误或掌握。", "",
-              "## 当前教学提示", "", record["teaching_hint"], "", "判断类型：legacy_unclassified（保留既有教学文本，未升级为逐结论事实）。", "",
+              "## 当前教学提示", "", hint, "", "判断类型：legacy_unclassified（既有教学文本须回到原证据核对）。", "",
               "## Observations", ""]
-    for episode in record.get("episodes", []):
+    for episode in ordered:
         for category, label, field, observed in (
                 ("learner_first_attempt", "首答", "first_attempt", episode.get("observed_at") or episode.get("study_date")),
                 ("teaching_correction", "纠正", "correction", episode.get("correction_observed_at") or episode.get("corrected_at")),

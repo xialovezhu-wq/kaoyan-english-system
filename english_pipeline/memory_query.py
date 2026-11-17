@@ -14,7 +14,8 @@ from .answer_safety import contains_answer_signal
 from .errors import ValidationError
 from .memory_store import (is_answer_safe, open_memory_projection,
                            read_lifecycle, record_text, search_tokens)
-from .personal_summary import INDEX, _latest_episode, _read_record, key_hash, normalize_key, observation_time
+from .personal_summary import (INDEX, OBSERVATION_ORDER_AMBIGUOUS, _read_record, ambiguous_observation_order,
+                               key_hash, normalize_key, select_observations)
 from .util import LOCAL_ZONE, canonical_bytes, file_sha256, load_json, object_sha256
 
 QUERY_SCHEMA = "english_memory_context_v1"
@@ -234,6 +235,11 @@ def _fit(result: dict[str, Any], max_bytes: int) -> dict[str, Any]:
     """Fit complete observations and preference sections, never sliced claims."""
     temporal_omissions = Counter()
     unknown_time = False
+    ambiguous_count = (sum(item.get("reason") == OBSERVATION_ORDER_AMBIGUOUS for item in result["unavailable"])
+                       + sum("observation_order" in point for point in result["matched"]))
+    ambiguity = {"observation_order_ambiguous_count": ambiguous_count} if ambiguous_count else {}
+    if ambiguity:
+        result = {**result, "coverage": {**result["coverage"], **ambiguity}}
     for point in result["matched"]:
         for episode in point.get("episodes", []):
             temporal_omissions.update(episode.get("temporal_fields_omitted", []))
@@ -318,7 +324,8 @@ def _fit(result: dict[str, Any], max_bytes: int) -> dict[str, Any]:
     if len(canonical_bytes(_public_payload(output))) > max_bytes:
         output = {"schema_version": QUERY_SCHEMA, "status": "partial", "matched": [],
                   "coverage": {"budget_limited": True, "points_omitted": len(result["matched"]),
-                               "diagnostics_omitted": sum(len(result[k]) for k in ("misses", "unavailable", "pending", "conflicts"))},
+                               "diagnostics_omitted": sum(len(result[k]) for k in ("misses", "unavailable", "pending", "conflicts")),
+                               **ambiguity},
                   "formal_write_count": 0, "history_scanned": False}
     return _public_payload(output)
 
@@ -583,9 +590,8 @@ def query_memory_context(repo: Path, state: Path, *, keys: list[str] | None = No
                     result["unavailable"].append({"key": key, "reason": "historical_evidence_no_longer_verified"})
                     continue
             episodes = []
-            # Select identity and scope first. A teaching read fetches only the
-            # newest eligible episode body and its direct locators after filtering.
-            all_rows = db.execute("SELECT episode_id,occurred_at,ordinal,source_ids_json,unit_ids_json,"
+            # Select identity and scope before reading a teaching episode body.
+            all_rows = db.execute("SELECT episode_id,occurred_at,source_ids_json,unit_ids_json,"
                                   "question_ids_json,scope_bindings_json FROM episodes WHERE point_key=?",
                                   (key,)).fetchall()
             invalid_ids = set(lifecycle.get("invalidated_episode_ids", []))
@@ -603,24 +609,25 @@ def query_memory_context(repo: Path, state: Path, *, keys: list[str] | None = No
                         continue
                     if _time(item["occurred_at"], end_of_day=True) > cutoff:
                         continue
-                episodes.append({"episode_id": item["episode_id"], "occurred_at": item["occurred_at"],
-                                 "ordinal": item["ordinal"], **scoped})
+                episodes.append({"episode_id": item["episode_id"], "occurred_at": item["occurred_at"], **scoped})
             if not episodes:
                 if exact:
                     reason = "no_evidence_as_of" if cutoff else "no_evidence_in_scope" if source_id or unit_id or question_id else "no_active_evidence"
                     result["unavailable"].append({"key": key, "reason": reason})
                 continue
             eligible += 1
-            episodes.sort(key=lambda e: (observation_time(e["occurred_at"]), e["ordinal"]), reverse=True)
-            if not cutoff and not (source_id or unit_id or question_id):
-                selected_id = record.get("latest_episode_id")
-                episodes.sort(key=lambda e: e["episode_id"] == selected_id, reverse=True)
             accepted = lifecycle.get("accepted_summary_hashes", {}).get(key) == row["summary_sha256"]
             if invalid_present and not accepted:
                 result["pending"].append({"key": key, "reason": "invalidated_evidence_requires_summary_refresh"})
                 continue
             filtered = len(episodes) != len(all_rows)
-            selected_episodes = episodes[:1] if teaching_only else episodes
+            group, episodes = select_observations(episodes, record if not cutoff else None)
+            ambiguous = len(group) > 1
+            if teaching_only and ambiguous:
+                if exact:
+                    result["unavailable"].append({"key": key, **ambiguous_observation_order(group)})
+                continue
+            selected_episodes = group if teaching_only else episodes
             history_allowed = True
             for episode in selected_episodes:
                 identity = episode["episode_id"]
@@ -659,7 +666,9 @@ def query_memory_context(repo: Path, state: Path, *, keys: list[str] | None = No
             scope_filtered = filtered and not (accepted and len(episodes) == active_count)
             summary_scope_incomplete = bool(cutoff or source_id or unit_id or question_id or scope_filtered)
             point["summary_scope_incomplete"] = summary_scope_incomplete
-            if not summary_scope_incomplete and not cutoff:
+            if ambiguous:
+                point["observation_order"] = ambiguous_observation_order(group)
+            elif not summary_scope_incomplete and not cutoff:
                 point["teaching_hint"] = record["teaching_hint"]
                 point["teaching_hint_status"] = "legacy_unclassified"
                 if record.get("contrasts"):
@@ -814,15 +823,16 @@ def _fallback_exact(state: Path, index: dict[str, Any], keys: list[str], ids: li
         if not episodes:
             result["unavailable"].append({"key": canonical, "reason": "no_evidence_as_of"})
             continue
-        if not cutoff:
-            latest = _latest_episode(record)
-            episodes.sort(key=lambda e: (e["episode_id"] == latest["episode_id"],
-                                         observation_time(e.get("observed_at") or e.get("study_date"))), reverse=True)
-        else:
-            episodes.sort(key=lambda e: observation_time(e.get("observed_at") or e.get("study_date")), reverse=True)
+        group, episodes = select_observations(episodes, record if not cutoff else None)
+        ambiguous = len(group) > 1
+        if view == "teaching" and not cutoff and ambiguous:
+            result["unavailable"].append({"key": canonical, **ambiguous_observation_order(group)})
+            continue
         point = {"key": canonical, "summary_sha256": pointer["sha256"], "retrieval_method": "degraded_exact_summary",
                  "teaching_hint_status": "legacy_unclassified", "coverage": "source_and_scope_index_unavailable"}
-        if not cutoff:
+        if ambiguous:
+            point["observation_order"] = ambiguous_observation_order(group)
+        elif not cutoff:
             point["teaching_hint"] = record["teaching_hint"]
         if view == "teaching" and not cutoff:
             point["latest_observation"] = _episode_public(episodes[0])

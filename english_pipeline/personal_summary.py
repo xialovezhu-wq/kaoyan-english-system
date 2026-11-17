@@ -5,14 +5,14 @@ import json
 import re
 import sqlite3
 import unicodedata
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
 from .answer_safety import point_answer_risk
 from .errors import IdempotencyConflict, ValidationError
-from .util import (LOCAL_ZONE, atomic_write_bytes, atomic_write_json, canonical_bytes,
-                   exclusive_lock, file_sha256, load_json, object_sha256, parse_iso_date)
+from .util import (LOCAL_ZONE, atomic_write_bytes, atomic_write_json, canonical_bytes, captured_reference_text,
+                   exclusive_lock, file_sha256, learner_message_spans, load_json, object_sha256, parse_iso_date)
 
 SCHEMA = "english_point_personal_summary_v1"
 INDEX = "english_point_personal_summary_index_v1"
@@ -20,6 +20,8 @@ PREFIXES = {"word", "phrase", "syntax", "option_type", "error_type"}
 CONTRAST_STATUSES = {"confirmed", "candidate", "recorded_form_uncertain", "sense"}
 TEACHING_OBJECT_BYTES = 12 * 1024
 EPISODE_BYTES = 12 * 1024
+OBSERVATION_ORDER_AMBIGUOUS = "observation_order_ambiguous"
+_MESSAGE_LOCATOR = re.compile(r"#?/?messages/(\d+)(?:/content)?")
 _FOLLOWUP_HINTS = {"not_observed": {"not_observed"}, "acknowledgment_only": {"not_observed"},
                    "prompted": {"hint", "explanation"}, "self_corrected": {"none"}, "independent": {"none"}}
 _ACK = re.compile(r"(?:懂了|我懂了|明白了|理解了|知道了|了解了|看懂了|学会了|好|好的|对|嗯+|收到|谢谢|原来如此|"
@@ -27,16 +29,15 @@ _ACK = re.compile(r"(?:懂了|我懂了|明白了|理解了|知道了|了解了|
 
 
 def _user_message_text(path: Path, locator: Any) -> str | None:
-    match = re.fullmatch(r"#?/?messages/(\d+)(?:/content)?", locator or "") if isinstance(locator, str) else None
+    match = _MESSAGE_LOCATOR.fullmatch(locator) if isinstance(locator, str) else None
     if not match:
         return None
     messages = load_json(path).get("messages", [])
     index = int(match[1])
     if not isinstance(messages, list) or index >= len(messages) or not isinstance(messages[index], dict):
         return None
-    row = messages[index]
-    content = row.get("content")
-    return content.strip() if row.get("role") == "user" and isinstance(content, str) and content.strip() else None
+    spans = learner_message_spans(messages[index], captured_reference_text(path))
+    return "\n\n".join(spans).strip() or None
 
 
 def _followup_index(episode: dict[str, Any]) -> int | None:
@@ -69,7 +70,8 @@ def _validate_followup_text(episode: dict[str, Any], text: str | None) -> None:
 
 
 def teaching_header(record: dict[str, Any]) -> dict[str, Any]:
-    return {k: record[k] for k in ("key", "visibility", "teaching_hint", "latest_episode_id", "contrasts") if k in record}
+    return {k: record[k] for k in ("key", "visibility", "teaching_hint", "latest_episode_id",
+                                   "latest_episode_order", "contrasts") if k in record}
 
 
 def observation_time(value: Any) -> datetime:
@@ -80,11 +82,108 @@ def observation_time(value: Any) -> datetime:
         return datetime.min.replace(tzinfo=timezone.utc)
 
 
+def _observation_bounds(row: dict[str, Any]) -> tuple[datetime, datetime] | None:
+    as_recorded = row.get("occurred_at", row.get("observed_at") or row.get("study_date"))
+    if not isinstance(as_recorded, str):
+        return None
+    precision = re.match(r"^\d{4}-\d{2}-\d{2}(?:[T ](\d{2})(?::?(\d{2})(?::?(\d{2})(?:[.,](\d+))?)?)?)?", as_recorded)
+    if precision is None:
+        return None
+    try:
+        raw_time = datetime.fromisoformat(as_recorded.replace("Z", "+00:00"))
+        start = raw_time if raw_time.tzinfo is not None else raw_time.replace(tzinfo=LOCAL_ZONE)
+        hour, minute, second, fraction = precision.groups()
+        if hour is None:
+            step = timedelta(days=1)
+        elif minute is None:
+            step = timedelta(hours=1)
+        elif second is None:
+            step = timedelta(minutes=1)
+        elif fraction is None:
+            step = timedelta(seconds=1)
+        else:
+            step = timedelta(microseconds=10 ** max(0, 6 - len(fraction)))
+        return (start.astimezone(timezone.utc), (start + step).astimezone(timezone.utc))
+    except (OverflowError, ValueError):
+        return None
+
+
+def select_observations(episodes: list[dict[str, Any]], record: dict[str, Any] | None = None
+                        ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """Return the possible latest group and a deterministic display order."""
+    timed = [(ep, _observation_bounds(ep)) for ep in episodes]
+    latest_start = max((bounds[0] for _, bounds in timed if bounds), default=None)
+    group = sorted((ep for ep, bounds in timed if bounds is None or bounds[1] > latest_start),
+                   key=lambda ep: ep["episode_id"])
+    ids = {ep["episode_id"] for ep in group}
+    proof = (record or {}).get("latest_episode_order")
+    if isinstance(proof, dict) and len(group) > 1:
+        preferred = record.get("latest_episode_id")
+        # A new or differently scoped observation can make a previously proven
+        # choice inapplicable. A stored preference alone is never chronology.
+        if (proof.get("episode_id") == preferred and preferred in ids
+                and proof.get("episode_ids") == sorted(ids)):
+            group = [ep for ep in group if ep["episode_id"] == preferred]
+    current = {ep["episode_id"] for ep in group}
+    past = sorted((ep for ep, _ in timed if ep["episode_id"] not in current), key=lambda ep: ep["episode_id"])
+    starts = {ep["episode_id"]: bounds[0] if bounds else datetime.min.replace(tzinfo=timezone.utc)
+              for ep, bounds in timed}
+    past.sort(key=lambda ep: starts[ep["episode_id"]], reverse=True)
+    return group, group + past
+
+
+def ambiguous_observation_order(group: list[dict[str, Any]]) -> dict[str, Any]:
+    return {"reason": OBSERVATION_ORDER_AMBIGUOUS, "episode_ids": sorted(ep["episode_id"] for ep in group)[:8],
+            "episode_ids_omitted": max(0, len(group) - 8)}
+
+
+def _verified_latest_order(repo: Path, episode_id: str, candidates: list[dict[str, Any]]) -> dict[str, Any] | None:
+    """Prove a tied explicit selection by distinct original user turns in one file."""
+    if len(candidates) < 2 or episode_id not in {ep["episode_id"] for ep in candidates}:
+        return None
+    anchors = {}
+    documents = {}
+    for ep in candidates:
+        possible = set()
+        for ref in ep.get("evidence", ()):
+            path = ref.get("path")
+            locator = ref.get("locator")
+            match = _MESSAGE_LOCATOR.fullmatch(locator) if isinstance(locator, str) else None
+            if not isinstance(path, str) or not match:
+                continue
+            original = (repo / path).resolve()
+            if not original.is_relative_to(repo.resolve()) or original.suffix != ".json":
+                continue
+            if original not in documents:
+                try:
+                    documents[original] = (file_sha256(original), load_json(original).get("messages", []),
+                                           captured_reference_text(original))
+                except (OSError, ValueError):
+                    documents[original] = ("", [], "")
+            digest, messages, source_text = documents[original]
+            turn = int(match[1])
+            if digest != ref["sha256"] or not isinstance(messages, list) or turn >= len(messages):
+                continue
+            spans = learner_message_spans(messages[turn], source_text)
+            if any(ep["first_attempt"].strip() == span.strip() for span in spans):
+                possible.add((original, digest, turn))
+        if len(possible) != 1:
+            return None
+        anchors[ep["episode_id"]], = possible
+    origin, digest, turn = anchors[episode_id]
+    if any(other[:2] != (origin, digest) or other[2] >= turn
+           for other_id, other in anchors.items() if other_id != episode_id):
+        return None
+    if len({anchor[2] for anchor in anchors.values()}) != len(anchors):
+        return None
+    return {"episode_id": episode_id, "episode_ids": sorted(anchors), "source_sha256": digest}
+
+
 def _is_archive_evidence(ref: Any) -> bool:
     return isinstance(ref, dict) and bool({"package_id", "package_sha256", "member"} & set(ref))
 
 
-def _validate_archive_locator(target: Path, locator: Any) -> bool:
+def _validate_archive_locator(target: Path, locator: Any, *, attempt: str | None = None) -> bool:
     """Resolve an exact node while retaining the original whole-member hash."""
     if not isinstance(locator, str) or not locator:
         raise ValidationError("archive summary evidence requires an exact locator")
@@ -117,15 +216,19 @@ def _validate_archive_locator(target: Path, locator: Any) -> bool:
                 or (len(tokens) == 3 and tokens[2] != "content") or not isinstance(document, dict)):
             return False
         messages = document.get("messages")
-        return (isinstance(messages, list) and int(tokens[1]) < len(messages)
-                and isinstance(messages[int(tokens[1])], dict)
-                and messages[int(tokens[1])].get("role") == "user")
+        if not isinstance(messages, list) or int(tokens[1]) >= len(messages):
+            return False
+        message = messages[int(tokens[1])]
+        spans = learner_message_spans(message, captured_reference_text(target))
+        return bool(spans) and (attempt is None or spans == (message["content"],)
+                                or any(attempt in span for span in spans))
     except (OSError, ValueError, TypeError, KeyError, IndexError) as exc:
         raise ValidationError("archive summary locator does not resolve") from exc
 
 
 def _validate_archive_evidence(repo: Path, state: Path, ref: dict[str, Any],
                                formal_receipt: dict[str, Any] | None, *,
+                               attempt: str | None = None,
                                followup_text: list[str | None] | None = None) -> bool:
     """Use only the native receipt -> pointer -> original package authority."""
     required = {"package_id", "package_sha256", "member", "sha256", "locator"}
@@ -172,9 +275,9 @@ def _validate_archive_evidence(repo: Path, state: Path, ref: dict[str, Any],
         target.relative_to(root)
         if not target.is_file() or file_sha256(target) != ref["sha256"]:
             raise ValidationError("archive summary evidence changed")
-        user_node = _validate_archive_locator(target, ref["locator"])
-        if followup_text is not None and member == "conversation.json" and user_node:
+        if followup_text is not None and member == "conversation.json":
             followup_text.append(_user_message_text(target, ref["locator"]))
+        user_node = _validate_archive_locator(target, ref["locator"], attempt=attempt)
         return member == "conversation.json" and user_node
     except (OSError, ValueError, TypeError) as exc:
         raise ValidationError("archive summary evidence is unavailable or escapes its package") from exc
@@ -317,7 +420,8 @@ def publish_personal_summaries(repo: Path, state: Path, document: dict[str, Any]
                 for i, ref in enumerate([] if review is not None else episode["evidence"]):
                     if _is_archive_evidence(ref):
                         archive_user_evidence |= _validate_archive_evidence(
-                            repo, state, ref, formal_receipt, followup_text=followup_text if i == follow_index else None)
+                            repo, state, ref, formal_receipt, attempt=episode["first_attempt"],
+                            followup_text=followup_text if i == follow_index else None)
                         continue
                     target = (repo / ref["path"]).resolve(strict=True)
                     relative = target.relative_to(repo.resolve())
@@ -360,18 +464,26 @@ def publish_personal_summaries(repo: Path, state: Path, document: dict[str, Any]
             record["aliases"] = sorted({normalize_key(a) for a in aliases} - {canonical})
             if old and old.get("visibility") == "protected":
                 record["visibility"] = "protected"
-            if old and new_ids and "latest_episode_id" not in supplied:
-                # Older supplements cannot overwrite the current teaching hint.
-                # An author intentionally revising it supplies the actual latest ID.
-                previous = _latest_episode(old)
-                new = [episodes[eid] for eid in new_ids]
-                if all(observation_time(ep.get("observed_at") or ep.get("study_date"))
-                       < observation_time(previous.get("observed_at") or previous.get("study_date"))
-                       or (ep.get("study_date") == previous.get("study_date")
-                           and ep.get("observation_status") == "historical_evidence_backfill_not_new_learning")
-                       for ep in new):
-                    record["latest_episode_id"] = previous["episode_id"]
+            group, _ = select_observations(record["episodes"])
+            group_ids = {ep["episode_id"] for ep in group}
+            if old and "latest_episode_id" not in supplied:
+                if old.get("latest_episode_id") in group_ids:
+                    record["latest_episode_id"] = old["latest_episode_id"]
+                if new_ids and not new_ids & group_ids:
                     record["teaching_hint"] = old["teaching_hint"]
+            # This proof is derived from original turns, never accepted from
+            # the authored summary. Preserve a still applicable prior proof.
+            record.pop("latest_episode_order", None)
+            preferred = record.get("latest_episode_id")
+            if preferred in group_ids and len(group) > 1:
+                previous_proof = (old or {}).get("latest_episode_order")
+                if (isinstance(previous_proof, dict) and previous_proof.get("episode_id") == preferred
+                        and previous_proof.get("episode_ids") == sorted(group_ids)):
+                    record["latest_episode_order"] = previous_proof
+                elif "latest_episode_id" in supplied:
+                    proof = _verified_latest_order(repo, preferred, group)
+                    if proof:
+                        record["latest_episode_order"] = proof
             if record["visibility"] == "answer_free" and point_answer_risk(record):
                 raise ValidationError("answer-free summary contains a concrete answer or answer-analysis reference; review and use protected")
             record["schema_version"] = SCHEMA
@@ -431,7 +543,7 @@ def _read_record(root: Path, pointer: dict[str, Any], *, bounded: bool = False) 
 
 
 def _fit_query_budget(result: dict[str, Any], max_bytes: int) -> dict[str, Any]:
-    """Keep complete teaching hints, then the newest whole observations that fit.
+    """Fit the current group together, then whole historical observations.
 
     This changes the response only; immutable published records retain every
     observation. A large point must not hide other independently useful hits.
@@ -451,13 +563,11 @@ def _fit_query_budget(result: dict[str, Any], max_bytes: int) -> dict[str, Any]:
         compact["matched"].append(point)
         compact["diagnostics_omitted"] -= 1
         if len(canonical_bytes(compact)) <= max_bytes:
-            # Dates order observations across independently published parts;
-            # insertion order breaks same-date ties and handles legacy dates.
-            episodes = sorted(enumerate(matched["episodes"]),
-                              key=lambda item: (item[1]["episode_id"] == matched.get("latest_episode_id"),
-                                                str(item[1].get("study_date", "")), item[0]),
-                              reverse=True)
-            pending.append((point, [episode for _, episode in episodes]))
+            group, ordered = select_observations(matched["episodes"])
+            if preferred := matched.get("latest_episode_id"):
+                group = [ep for ep in ordered if ep["episode_id"] == preferred]
+            ids = {ep["episode_id"] for ep in group}
+            pending.append((point, [group] + [[ep] for ep in ordered if ep["episode_id"] not in ids]))
         else:
             compact["matched"].pop()
             compact["diagnostics_omitted"] += 1
@@ -479,31 +589,26 @@ def _fit_query_budget(result: dict[str, Any], max_bytes: int) -> dict[str, Any]:
     # to fit: that could hide a later correction or an unresolved recurrence.
     while pending:
         next_pending = []
-        for point, episodes in pending:
-            if not episodes:
+        for point, groups in pending:
+            if not groups:
                 continue
-            point["episodes"].append(episodes[0])
-            point["episodes_returned"] += 1
-            point["episodes_omitted"] -= 1
+            batch = groups[0]
+            point["episodes"].extend(batch)
+            point["episodes_returned"] += len(batch)
+            point["episodes_omitted"] -= len(batch)
             if len(canonical_bytes(compact)) <= max_bytes:
-                next_pending.append((point, episodes[1:]))
+                next_pending.append((point, groups[1:]))
             else:
-                point["episodes"].pop()
-                point["episodes_returned"] -= 1
-                point["episodes_omitted"] += 1
+                del point["episodes"][-len(batch):]
+                point["episodes_returned"] -= len(batch)
+                point["episodes_omitted"] += len(batch)
         pending = next_pending
     return compact
 
 
 def _latest_episode(record: dict[str, Any]) -> dict[str, Any]:
-    selected = record.get("latest_episode_id")
-    if selected is not None:
-        match = next((e for e in record["episodes"] if e["episode_id"] == selected), None)
-        if match is None:
-            raise ValidationError("latest observation binding changed")
-        return match
-    return max(enumerate(record["episodes"]), key=lambda item: (
-        observation_time(item[1].get("observed_at") or item[1].get("study_date")), item[0]))[1]
+    group, _ = select_observations(record["episodes"], record)
+    return group[0] if len(group) == 1 else {}
 
 
 def _fit_teaching_budget(result: dict[str, Any], max_bytes: int) -> dict[str, Any]:
@@ -609,8 +714,12 @@ def query_personal_summary(state: Path, *, keys: list[str], question_review: boo
                            if isinstance(ref.get("path"), str))):
                 result["unavailable"].append({"key": key, "reason": "scope_index_unavailable"})
                 continue
+            group, _ = select_observations(record["episodes"], record)
+            latest = group[0] if len(group) == 1 else {}
             if view == "teaching":
-                latest = _latest_episode(record)
+                if not latest:
+                    result["unavailable"].append({"key": record["key"], **ambiguous_observation_order(group)})
+                    continue
                 point = {"key": record["key"], "summary_sha256": pointer["sha256"],
                          "teaching_hint": record["teaching_hint"],
                          "latest_observation": {k: latest[k] for k in
@@ -624,12 +733,18 @@ def query_personal_summary(state: Path, *, keys: list[str], question_review: boo
                 continue
             # Evidence is verified at formal publication, never reread in tutoring.
             result["matched"].append({"key": record["key"], "summary_sha256": pointer["sha256"],
-                                      "teaching_hint": record["teaching_hint"],
+                                      **({"teaching_hint": record["teaching_hint"]} if latest else
+                                         {"observation_order": ambiguous_observation_order(group)}),
                                       **({"latest_episode_id": record["latest_episode_id"]}
-                                         if record.get("latest_episode_id") else {}),
+                                         if record.get("latest_episode_id") == latest.get("episode_id") and latest else {}),
                                       **({"contrasts": record["contrasts"]} if record.get("contrasts") else {}),
                                       "episodes": [{k: v for k, v in e.items() if k != "evidence"}
                                                    for e in record["episodes"]]})
         except (OSError, ValueError, KeyError, TypeError, sqlite3.Error, ValidationError):
             result["unavailable"].append({"key": key, "reason": "invalid_or_missing_summary"})
+    ambiguous_count = (sum(item["reason"] == OBSERVATION_ORDER_AMBIGUOUS for item in result["unavailable"])
+                       + sum("observation_order" in point for point in result["matched"]))
+    if ambiguous_count:
+        result["observation_order_ambiguous_count"] = ambiguous_count
+        result["status"] = "partial" if result["matched"] else "unavailable"
     return fit_budget(result, max_bytes)

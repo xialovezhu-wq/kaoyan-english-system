@@ -1,0 +1,79 @@
+{
+  "chatgpt_independent_readback": "PENDING",
+  "local_code_commit": "4d83d30291bde6af845934c98bbce806597365d4",
+  "local_install_status": "VERIFIED_CURRENT",
+  "local_patch_sha256": "99e1364329b2f32ddf03f61153d0ed1f7ae7bafca02afbb403bec7df633c75ed",
+  "local_targeted_tests_passed": 9,
+  "production_counts": {
+    "capture_records": 0,
+    "formal_actions": 0,
+    "learner_events": 0,
+    "mastery_changes": 0,
+    "model_api_calls": 0
+  },
+  "public_base_commit": "66e16a4f059085f39d43e451cc763265ce649e85",
+  "public_sha256": {
+    "codex-skill-sources/kaoyan-english-daily-intake-curation/references/typed-actions-contract.md": "a42db2c9c52c235059f9bc43f1adaff867d48bcbf01ea49155aa9ab2fcf03239",
+    "codex-skill-sources/kaoyan-english-intensive-reading/references/memory-context.md": "5a0138c3a8852bef56ed1fa5a9b5a888232636cbedf20fa6060ead7c6dded3b6",
+    "codex-skill-sources/kaoyan-english-intensive-reading/references/point-personal-summary.md": "a28b842e6e6c47b098ce08fcb51e369f20320cfe55ff2e1b707964a748ff32b5",
+    "english_pipeline/learning_state.py": "d02f59c6b66713189ecb365261b1afbe02d4cd35e1927b25061a1188608ce0d1",
+    "english_pipeline/memory_cli.py": "14bd1a85b369db9a1ac00c66e0caf7796ccbedf28963ff3113e2ddd3bd21542f",
+    "english_pipeline/memory_lifecycle.py": "f80d87d6b6e5fb4f952cdf3c8062d0e95669db3a8aa8831b97cfe14e31e00a2c",
+    "english_pipeline/memory_query.py": "f8192a39cc769bf6100c3efece148deb37b4d493089f94a57df8fa943cbbe4ad",
+    "english_pipeline/memory_store.py": "1103f091462ada1b30d60728c7b088ad1a41508c111673a5ff6624b60ec038c1",
+    "english_pipeline/personal_summary.py": "ef59dc76e173fff35e950d3510610a577854095f5616dea9bae7380b0360ccef",
+    "english_pipeline/publication.py": "0cc1bf1ab946e8801991cb4c6764bef523127597ac23a2d1fa0b211c50f85e5a",
+    "english_pipeline/summary_source_review.py": "9cee67632c24c5e35ad7b6754084bf7ac13700964659cdba0ee396d02c7ddd14",
+    "english_pipeline/util.py": "17d089bec9e437c909a763c047f1ce1c031b9a18502a0668edce56b89db7a61d",
+    "english_pipeline/web_review.py": "a164b1b1dd2299e8b606300f890c4a29850a1f243f0b7442bdbd1d247f7e9669",
+    "tests/english_pipeline/test_memory_integrity_v2.py": "fd7351e9e9eb961050c02cee6a55300a2f3fa88cc607b0a19af1a762f3f5bfca",
+    "tests/english_pipeline/test_scoped_correction.py": "cf5e08a31e84093f19cab6bf0ad00de0c9c90001b65a4034b4c7709c595f5392"
+  },
+  "public_targeted_tests_passed": 9,
+  "scope": "Public source review; runtime deployment and publication readback are tracked by the outer receipt.",
+  "status": "VERIFIED_IMPLEMENTATION",
+  "study_data_release": {
+    "actual_receipt": "outer_readback",
+    "personalization": "not_published",
+    "target": "local"
+  },
+  "subject": "english",
+  "task_id": "MEMORY-INTEGRITY-20261117-ENGLISH-V2",
+  "validation": [
+    {
+      "ambiguity": "bounded episode IDs, no selected latest, summary or teaching authority inferred from list position",
+      "deliveries": [
+        "together",
+        "late_parts",
+        "reversed"
+      ],
+      "group": "observation_order",
+      "ordering_basis": "recorded precision or exact original user turns; confirmed withdrawal applied before selection",
+      "scope_checks": "unchanged native source/unit/question gating and bounded unscoped fallback",
+      "status": "PASS"
+    },
+    {
+      "group": "cross_session_source_and_withdrawal",
+      "non_target_records": "B/C unchanged, no question opened by external text",
+      "readback": "native, supported degraded, pinned history, current safe mirror and protected cross-article Q21",
+      "scope": "One synthetic engineering case. No model behavior evaluation.",
+      "source_checks": "quoted-only response and quoted confirmation rejected; the actual user's response remains admissible",
+      "status": "PASS"
+    },
+    {
+      "formal_apply_invocation_count_in_recovery": 0,
+      "group": "derived_recovery_and_normal_entry",
+      "local_formal_before_after_equal": true,
+      "normal_read": {
+        "api_requests": 0,
+        "elapsed_ms_with_wrapper_and_import_trace": 236.2,
+        "formal_write_count": 0,
+        "matched_count": 1,
+        "mode": "native teaching scoped exact read",
+        "output_bytes": 2571,
+        "status": "ready"
+      },
+      "status": "PASS"
+    }
+  ]
+}

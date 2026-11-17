@@ -16,7 +16,7 @@ from .constants import MASTER_HEADER, MASTERED_HEADER
 from .errors import IdempotencyConflict, ValidationError
 from .formal import read_csv
 from .review_status import effective_review_status, effective_mastered_norms, effective_mastered_ids, load_review_status_ledger
-from .util import canonical_bytes, file_sha256, normalize_item, object_sha256, parse_iso_date, utc_now, atomic_write_json
+from .util import canonical_bytes, file_sha256, learner_message_spans, normalize_item, object_sha256, parse_iso_date, utc_now, atomic_write_json
 
 
 EVENT_SCHEMA = "english_formal_learning_event_v1"
@@ -109,8 +109,16 @@ def validate_learning_event(event: Any, resolved: list[dict[str, Any]], *, study
     _validate_event_fields(event)
     if parse_iso_date(event["observed_at"]) != study_date and not (event["kind"] == "adjudication" and event["origin"] == "project-E"):
         raise ValidationError("formal learning event must retain the original package study date")
-    user_text = [str(row["value"].get("content", "")) for row in resolved
-                 if row["binding"].get("resolved_role") == "user" and isinstance(row["value"], dict)]
+    frozen = {row["package_id"]: row for row in package_documents}
+    identities = {}
+    user_text = []
+    for row in resolved:
+        pid = row["binding"]["package_id"]
+        if pid not in identities:
+            identities[pid] = load_json_document(Path(frozen[pid]["path"]) / "source.json").get("identity", {})
+        if row["binding"].get("resolved_role") == "user":
+            source_text = identities[pid].get("source_sentence")
+            user_text.extend(learner_message_spans(row["value"], source_text if isinstance(source_text, str) else ""))
     def text_values(value: Any) -> list[str]:
         if isinstance(value, str):
             return [value]
@@ -122,7 +130,7 @@ def validate_learning_event(event: Any, resolved: list[dict[str, Any]], *, study
     evidence_text = [text for row in resolved for text in text_values(row["value"])]
     if event["kind"] != "adjudication":
         if not event["user_response"].strip() or not any(event["user_response"] in text for text in user_text):
-            raise ValidationError("real learning backflow requires the verbatim user response in package evidence")
+            raise ValidationError("real learning backflow requires the verbatim user response outside quoted source material")
     for key in ("reasoning", "correction"):
         if event[key] and not any(event[key] in text for text in evidence_text):
             raise ValidationError(f"formal {key} is absent from the bound raw evidence")
@@ -133,14 +141,13 @@ def validate_learning_event(event: Any, resolved: list[dict[str, Any]], *, study
     if event["kind"] in {"answer", "review"} and event["outcome"] == "correct" and event["hint_dependence"] == "none" and event["reasoning_status"] == "valid":
         if not any(row["binding"]["kind"] == "independent_correct_use" for row in resolved):
             raise ValidationError("independent success requires exact independent_correct_use user evidence")
-    frozen = {row["package_id"]: row for row in package_documents}
     source_matches = False
     answer_safe = True
     web_matches = event["origin"] == "daily"
     actual_adjudication_time_matches = event["kind"] != "adjudication" or event["origin"] != "project-E"
     for row in resolved:
         package = frozen[row["binding"]["package_id"]]
-        identity = load_json_document(Path(package["path"]) / "source.json").get("identity", {})
+        identity = identities[package["package_id"]]
         if identity.get("answer_exposure") != "answer_free" or identity.get("source_kind") in {"question", "option", "explanation"}:
             answer_safe = False
         units = {identity.get(key) for key in ("sentence_id", "question_id", "paragraph_id", "knowledge_point_id")}

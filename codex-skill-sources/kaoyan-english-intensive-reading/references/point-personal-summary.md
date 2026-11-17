@@ -49,7 +49,7 @@ source_episode_ids 必须指向本点真实保留的 episode；新语境不能�
 
 teaching_hint 优先写最近能改变讲解的事实：已经读对什么、仍错在哪、对应语境、下一步第一动作。长历史只留会改变当前动作的转折；没有后续独立复测，不等于可以忽略已经出现的局部正确或同条自改。不要把统一“下次并排比较”等流程话塞进每个点。
 
-补录早先遗漏证据时保持原日期，标 `observation_status=historical_evidence_backfill_not_new_learning`，不计新增学习事件。同日中间观察晚补入时，可以指定 `latest_episode_id` 为真正较晚的原episode；它必须属于该点已保留的记录，不能因追加顺序把中间改善误当最新状态。新正式学习发布时若未指定此字段，按学习日期及原有顺序选择；审阅者应核对同日先后。
+补录早先遗漏证据时保持原日期，标 `observation_status=historical_evidence_backfill_not_new_learning`。只按原发生时间及其精度比较观察，同日只有日期、时间相同或时间缺失时保留可能最新的并列组。明确知道同一原对话中的先后时，`latest_episode_id` 可指向保留的较晚观察，程序核对其准确原话、回合定位和原件 SHA 再采用。撤回已被证据否定的旧观察继续走既有定点入口。
 
 多义词的对照可加 applies_when，明确对应当前搭配或错法；它不证明本次已发生错误。sense 的 other_meaning 是用户当时的误译，不保证是该词的合法义项；展示时标“你当时的误译”。
 
@@ -97,6 +97,6 @@ python3 scripts/english_learning_pipeline.py publish-personal-summaries --input-
 
 REVIEW.json 的 schema_version 为 english_summary_source_review_v1，purpose 为 explicit_summary_maintenance，summary_input_sha256 绑定 POINTS 的规范JSON哈希。sources 逐文件列 path、sha256、kind、locators 与可核对的原 study_dates；kind 区分 learner_dialogue、learner_record、assistant_explanation、formal_advice。locator 使用精确JSON指针（如 /messages/3）或 lines/起行-止行。可带逐字quote，发布时核对该定位中的原文。
 
-每个新增摘要观察必须包含原始用户证据，不能只引正式建议或助手译文。直接引用原件，避免再次以旧摘要为唯一依据。保留原学习日期；标明这是历史复审而非新作答。已有点可用 expected_summary_sha256 绑定审阅前版本，漂移则重核该点。原有episodes、来源与答案保护继续保留。
+每个新增摘要观察须有原始用户证据。资料可用 `source_text` 作为辅助来源。用户消息含转贴块时，须用准确原话定位该观察对应的用户自写作答。保留原学习日期，历史复审按原身份记录。已有点可用 expected_summary_sha256 绑定审阅前版本，漂移则重核该点。原有 episodes、来源与答案保护继续保留。
 
 教学成稿应让讲解者立刻决定：本句哪个最小点需要介入、哪些正确部分不用重教、历史末次改变了什么、先展示哪一组对照或结构、什么仍未验证。已有改善不能被“未做独立复测”抹去；旧误译也不能因为用户说理解了就自动关闭。

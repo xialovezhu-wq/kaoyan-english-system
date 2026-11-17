@@ -249,6 +249,8 @@ def _web_teaching_context(state: Path) -> dict[str, bytes]:
                     if current.get("latest_episode_id") in invalid:
                         current.pop("latest_episode_id")
                     latest = _latest_episode(current)
+                    if not latest:
+                        continue
                     # No raw refs, quotes, or previous answer trajectories go
                     # in the ZIP. The compact view is advisory, not evidence.
                     view = {"schema_version": SCHEMA, "key": key, "aliases": record["aliases"],

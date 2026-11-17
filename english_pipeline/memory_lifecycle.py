@@ -340,7 +340,7 @@ def _learner_episode(repo: Path, state: Path, episode: dict[str, Any], formal_re
     from .personal_summary import _is_archive_evidence, _validate_archive_evidence, _validate_archive_locator
     for ref in episode.get("evidence", []):
         if _is_archive_evidence(ref):
-            if _validate_archive_evidence(repo, state, ref, formal_receipt):
+            if _validate_archive_evidence(repo, state, ref, formal_receipt, attempt=episode["first_attempt"]):
                 return True
             continue
         path = (repo / ref.get("path", "")).resolve()
@@ -353,7 +353,7 @@ def _learner_episode(repo: Path, state: Path, episode: dict[str, Any], formal_re
         bound = dict(zip((formal_receipt or {}).get("package_ids", []), (formal_receipt or {}).get("package_sha256s", [])))
         if bound.get(manifest.get("package_id")) != manifest.get("package_canonical_sha256"):
             continue
-        if _validate_archive_locator(path, ref.get("locator")):
+        if _validate_archive_locator(path, ref.get("locator"), attempt=episode["first_attempt"]):
             return True
     return False
 
@@ -459,8 +459,12 @@ def preflight_summary_memory(repo: Path, state: Path, document: dict[str, Any], 
         if claim["basis"] == "inference" and claim["status"] == "confirmed":
             raise ValidationError("an inference cannot become a confirmed learner fact")
         ids = evidence(claim["evidence_episode_ids"])
-        if not set(ids) <= {ep["episode_id"] for ep in all_records[key]["episodes"]}:
+        point_episodes = {ep["episode_id"]: ep for ep in all_records[key]["episodes"]}
+        if not set(ids) <= point_episodes.keys():
             raise ValidationError("claim evidence must belong to its point")
+        if review is not None and (claim["basis"] == "user_explicit" or claim["status"] == "confirmed"):
+            for eid in ids:
+                review.validate_episode(point_episodes[eid], assertion=claim["content"])
         for field in ("valid_from", "valid_to"):
             if claim.get(field) is not None:
                 if not isinstance(claim[field], str):

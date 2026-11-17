@@ -265,9 +265,13 @@ class ScopedCorrectionTests(unittest.TestCase):
         for digest in self.old_routes.values():
             self.assertEqual(file_sha256(objects / f"{digest}.json"), digest)
         a = self.teaching("A")
-        self.assertEqual(a["status"], "ready", a)
-        self.assertEqual(a["matched"][0]["latest_observation"]["episode_id"], expected_latest)
-        self.assertEqual(a["matched"][0]["claims"], [])
+        if expected_latest is None:
+            self.assertFalse(a["matched"])
+            self.assertEqual(a["unavailable"][0]["reason"], "observation_order_ambiguous")
+        else:
+            self.assertEqual(a["status"], "ready", a)
+            self.assertEqual(a["matched"][0]["latest_observation"]["episode_id"], expected_latest)
+            self.assertEqual(a["matched"][0]["claims"], [])
         self.assertNotIn(EXTERNAL_EXAMPLE, json.dumps(a))
         d = self.teaching("D")
         self.assertFalse(d["matched"], d)
@@ -442,8 +446,8 @@ class ScopedCorrectionTests(unittest.TestCase):
             self.assertFalse(replay["current_pointer_rewritten"])
         self.assertEqual(self.routes(), corrected)
         self.assertEqual(self.bank_hashes(), self.old_bank)
-        point = self.cli("query-memory-context", "--backend", "native", "--view", "teaching", "--key", KEYS["A"])["matched"][0]
-        self.assertEqual(point["latest_observation"]["episode_id"], "A-original")
+        unscoped = self.cli("query-memory-context", "--backend", "native", "--view", "teaching", "--key", KEYS["A"])
+        self.assertEqual(unscoped["unavailable"][0]["reason"], "observation_order_ambiguous")
         source_read = self.cli("query-memory-context", "--backend", "native", "--view", "teaching",
                                "--source-id", SOURCES["A"], "--unit-id", "S01", "--id", "A-original")
         self.assertEqual(source_read["matched"][0]["latest_observation"]["first_attempt"], self.a_original)
@@ -451,7 +455,7 @@ class ScopedCorrectionTests(unittest.TestCase):
         projection = load_json(Path(published["memory"]["receipt_path"]))["projection_receipt"]
         self.assertEqual(projection["updated_keys"], sorted([KEYS["A"], KEYS["D"]]))
         emit_receipt("retract", request_target_ids=["claim:A", "A-interpretation"], scope=[KEYS["A"], KEYS["D"]],
-                     **self.assert_delta([], "A-withdrawal-evidence"), formal_write_count=0, learning_event_write_count=0,
+                     **self.assert_delta([], None), formal_write_count=0, learning_event_write_count=0,
                      model_requests=0, memory_publication="ready", exact_and_old_replay="idempotent",
                      original_attempt_teaching_readback="A-original", confirmed_control_preserved=True,
                      errors={"inference_as_confirmed": "ValidationError", "stable_claim_conflict": "IdempotencyConflict",

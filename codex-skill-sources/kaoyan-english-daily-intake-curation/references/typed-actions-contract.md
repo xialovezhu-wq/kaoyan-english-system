@@ -28,6 +28,8 @@ Allowed formal operations remain master_bank_insert, master_bank_update, mastere
 
 For `master_bank_update` on `source_sentence`, cite `source.json#/identity/source_sentence` with `kind=source_text`. The corrected value must match the frozen original after whitespace and Unicode normalization. Learner remarks, assistant notes and external example sentences have their own evidence roles.
 
+Bind `learning_event_append.user_response` to the learner-authored span of the exact user message. A pasted source may stay in the sealed conversation and be cited as reference. It supplies neither `independent_correct_use` evidence nor apply or answer authorization.
+
 mastered_insert requires explicit independent_correct_use evidence. Guided understanding, explanations, generated examples and self-report are insufficient. Ambiguous sense, duplicate, source or mastery decisions go to needs_user without blocking independent safe actions.
 
 For real answer/correction/review results and local A-advice decisions, use learning_event_append under references/learning-backflow-contract.md; vocabulary-only edits do not replace the event history.

@@ -278,7 +278,7 @@ def verify_native_readback(repo: Path, state: Path, formal_version: str,
     """Reopen the same guarded point view that local English teaching uses."""
     from .memory_query import query_memory_context
     from .memory_store import open_memory_projection
-    from .personal_summary import key_hash
+    from .personal_summary import OBSERVATION_ORDER_AMBIGUOUS, key_hash
 
     result = {"formal_version": formal_version, "points": {}, "memory_status": memory["status"]}
     if memory["status"] == "ready" and memory.get("affected_keys"):
@@ -304,6 +304,10 @@ def verify_native_readback(repo: Path, state: Path, formal_version: str,
                 invalidation = {"key": key, "reason": "invalidated_summary_requires_refresh"}
                 if not matches and output.get("status") == "pending" and output.get("pending") == [invalidation]:
                     visibility = "invalidated"
+                elif (row["answer_safe"] and not matches and output.get("status") == "unavailable"
+                      and any(item.get("key") == key and item.get("reason") == OBSERVATION_ORDER_AMBIGUOUS
+                              and len(item.get("episode_ids", [])) > 1 for item in output.get("unavailable", []))):
+                    visibility = OBSERVATION_ORDER_AMBIGUOUS
                 elif row["answer_safe"]:
                     if (output.get("status") != "ready" or len(matches) != 1 or matches[0].get("key") != key
                             or matches[0].get("summary_sha256") != expected

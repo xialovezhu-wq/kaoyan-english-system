@@ -56,8 +56,10 @@ def _budget(result: dict[str, Any], maximum: int) -> dict[str, Any]:
     result.pop("backend", None)
     if len(canonical_bytes(result)) <= maximum:
         return result
+    ambiguous = result.get("coverage", {}).get("observation_order_ambiguous_count")
     return {"schema_version": "english_memory_context_v1", "status": "partial",
-            "matched": [], "coverage": {"complete": False, "reason": "response_budget"},
+            "matched": [], "coverage": {"complete": False, "reason": "response_budget",
+                                        **({"observation_order_ambiguous_count": ambiguous} if ambiguous else {})},
             "formal_write_count": 0}
 
 
