@@ -330,7 +330,8 @@ class MemoryQueryTests(MemoryFixture):
             })
             records.append(key)
         build_memory_projection(self.repo, self.state)
-        path = self.state / "memory/claims.json"
+        # The reader resolves the state root before opening claims.json.
+        path = (self.state / "memory/claims.json").resolve()
 
         def save(text):
             claims = {

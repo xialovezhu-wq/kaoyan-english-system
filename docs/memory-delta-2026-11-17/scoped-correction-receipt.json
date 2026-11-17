@@ -367,20 +367,74 @@
   "review_branch_validation": {
     "adaptation": "Native teaching readback integrated with the existing public closeout. Synthetic fixture helpers replace the unpublished integration-test dependencies.",
     "base_sha": "3e6e4251ccf1cf66a7fd883c151082b3bd31f28a",
-    "full_public_pipeline_suite": {
-      "existing_failure": {
-        "failing_subtest_sizes": [
-          1,
-          3,
-          8
-        ],
-        "failure": "read-count assertion expected 1, observed 0",
-        "reproduced_on_unmodified_base": true,
-        "test": "test_claims_load_once_per_request_only_for_eligible_points"
+    "claims_read_count_follow_up": {
+      "base_sha": "fae2d9720534ce395e0ae464918e461914e215cc",
+      "case_results": [
+        {
+          "claims_delivered": 1,
+          "keys_requested": 1,
+          "observed_file_reads": 1,
+          "old_test_count": 0
+        },
+        {
+          "claims_delivered": 3,
+          "keys_requested": 3,
+          "observed_file_reads": 1,
+          "old_test_count": 0
+        },
+        {
+          "claims_delivered": 5,
+          "keys_requested": 8,
+          "observed_file_reads": 1,
+          "old_test_count": 0
+        }
+      ],
+      "classification": "test_count_false_positive",
+      "fix": "Resolve the expected claims path in the test before counting calls.",
+      "no_match_file_reads": 0,
+      "outside_article_scope_file_reads": 0,
+      "previous_public_suite": {
+        "existing_failure": {
+          "failing_subtest_sizes": [
+            1,
+            3,
+            8
+          ],
+          "failure": "read-count assertion expected 1, observed 0",
+          "reproduced_on_unmodified_base": true,
+          "test": "test_claims_load_once_per_request_only_for_eligible_points"
+        },
+        "failing_tests": 1,
+        "passed": 115,
+        "total": 116
       },
-      "failing_tests": 1,
-      "passed": 115,
+      "probe": "Path.open spy on unmodified committed query under the failing test",
+      "root_cause": "The test matched the lexical temporary path (/var), while the query opens the canonical path (/private/var). Both addresses resolved to the same file.",
+      "runtime_code_changed": false,
+      "state_changed_during_query_withheld": true,
+      "status": "PASS",
+      "test": "test_claims_load_once_per_request_only_for_eligible_points",
+      "test_sha256": "28244ecf9628f7b2b9d76588f291af1029819a5196952b0d95166911fd583027"
+    },
+    "full_public_pipeline_suite": {
+      "failing_tests": 0,
+      "passed": 116,
       "total": 116
+    },
+    "full_public_suite": {
+      "discovery_roots": {
+        "codex-skill-sources/kaoyan-english-daily-intake-curation/tests": 3,
+        "codex-skill-sources/kaoyan-english-intensive-reading/tests": 2,
+        "tests/english_pipeline": 116
+      },
+      "failed": 0,
+      "passed": 121,
+      "runner": {
+        "command": "python3 -m unittest discover -s <test-root> -v",
+        "platform": "Darwin",
+        "python": "3.14.2"
+      },
+      "total": 121
     },
     "new_cases": [
       {
@@ -412,13 +466,14 @@
     "ref": "refs/heads/memory/20261116-english",
     "reproduce_scoped": "PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests/english_pipeline -p test_scoped_correction.py -v",
     "scoped_pipeline_tests_passed": 3,
-    "skill_tests_passed": 3,
+    "skill_tests_passed": 5,
     "source_and_test_digests": {
       "codex-skill-sources/kaoyan-english-daily-intake-curation/references/typed-actions-contract.md": "5069d945b38cce50360819aace174a300c7cf65b6dcc829ed1287f9f92dc2ed5",
       "english_pipeline/publication.py": "854739670c7798232ef4a3db504e8588d00631287c35526f2d28022f029c1af6",
       "english_pipeline/writer.py": "df3ee603d866c05616b5dfa349a3d6384cdf407fae05d980c6473462710a9a44",
       "tests/english_pipeline/cold_fixture.py": "528643fb6f1685569cade308cd9d976af35ad1921503606fa21f0ba6b4686a79",
       "tests/english_pipeline/scoped_correction_fixture.py": "b3700a3375225197e44bb374ce9ed1c3500c9b572a3af44158e3c7e06eca201a",
+      "tests/english_pipeline/test_memory_query.py": "28244ecf9628f7b2b9d76588f291af1029819a5196952b0d95166911fd583027",
       "tests/english_pipeline/test_scoped_correction.py": "07973eebd6a16230e93d25c0fedc9b4b59319ac66c79f22c2c1d7d0ae447776c"
     }
   },
