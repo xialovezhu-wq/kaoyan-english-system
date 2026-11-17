@@ -32,6 +32,7 @@ from .util import (
     file_sha256,
     load_json,
     normalize_item,
+    normalize_sentence,
     object_sha256,
     utc_now,
     exclusive_lock,
@@ -204,8 +205,15 @@ def _validate_sol_actions_v2(
             updates = action.get("updates")
             if not isinstance(updates, dict) or not updates or not set(updates).issubset(UPDATE_FIELDS):
                 raise ValidationError(f"{context} updates contain unsupported fields")
-            if "source_sentence" in updates and str(updates["source_sentence"]).casefold() not in bound_text:
-                raise ValidationError(f"{context} corrected source sentence is absent from raw evidence")
+            if "source_sentence" in updates:
+                sentence = updates["source_sentence"]
+                if not isinstance(sentence, str) or not normalize_sentence(sentence) or not any(
+                    ref["binding"]["pointer"] == "source.json#/identity/source_sentence"
+                    and isinstance(ref["value"], str)
+                    and normalize_sentence(ref["value"]) == normalize_sentence(sentence)
+                    for ref in refs
+                ):
+                    raise ValidationError(f"{context} corrected source sentence must match the frozen source sentence")
             if "meaning" in updates and (not str(updates["meaning"]).strip() or str(updates["meaning"]).casefold() not in bound_text):
                 raise ValidationError(f"{context} corrected meaning is absent from raw evidence")
         elif kind == "mastered_insert":
@@ -670,7 +678,7 @@ def apply_nightly(
     if apply and manifest.get("schema_version") == "english_nightly_manifest_v3" and manifest["package_documents"]:
         from .formal_model_review import formal_model_review_enabled, prepare_formal_model_review
         model_review_required = formal_model_review_enabled(state_dir)
-    if model_review_required:
+    if apply:
         from .backlog import _existing_closeout_for_batch
         committed = _existing_closeout_for_batch(state_dir, manifest, actions_doc["action_set_id"])
         if committed:
@@ -731,7 +739,7 @@ def apply_nightly(
         pending_transactions = _open_transaction_paths(state_dir)
         if pending_transactions:
             raise ValidationError(f"recovery_required: open formal transactions {pending_transactions}")
-        if model_review_required:
+        if apply:
             committed = _existing_closeout_for_batch(state_dir, manifest, actions_doc["action_set_id"])
             if committed:
                 if committed[1]["actions_sha256"] != actions_sha:

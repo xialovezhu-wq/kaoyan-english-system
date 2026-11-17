@@ -26,6 +26,8 @@ The writer records the resolved node SHA-256, node type and exact role in its ac
 
 Allowed formal operations remain master_bank_insert, master_bank_update, mastered_insert, sentence_pattern_append, sentence_pattern_merge, learning_event_append, skip_duplicate and the existing review status operations. Sol never supplies a filesystem path, shell command or formal ID allocation.
 
+For `master_bank_update` on `source_sentence`, cite `source.json#/identity/source_sentence` with `kind=source_text`. The corrected value must match the frozen original after whitespace and Unicode normalization. Learner remarks, assistant notes and external example sentences have their own evidence roles.
+
 mastered_insert requires explicit independent_correct_use evidence. Guided understanding, explanations, generated examples and self-report are insufficient. Ambiguous sense, duplicate, source or mastery decisions go to needs_user without blocking independent safe actions.
 
 For real answer/correction/review results and local A-advice decisions, use learning_event_append under references/learning-backflow-contract.md; vocabulary-only edits do not replace the event history.

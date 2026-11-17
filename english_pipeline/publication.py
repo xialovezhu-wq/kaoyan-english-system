@@ -4,7 +4,9 @@ from __future__ import annotations
 import importlib.util
 import json
 import re
+import sqlite3
 import sys
+from contextlib import closing
 from pathlib import Path
 from typing import Any, Callable
 
@@ -271,6 +273,61 @@ def _complete_snapshot_closeout(repo_root: Path, state_dir: Path, receipt: dict[
     return value
 
 
+def verify_native_readback(repo: Path, state: Path, formal_version: str,
+                           memory: dict[str, Any]) -> dict[str, Any]:
+    """Reopen the same guarded point view that local English teaching uses."""
+    from .memory_query import query_memory_context
+    from .memory_store import open_memory_projection
+    from .personal_summary import key_hash
+
+    result = {"formal_version": formal_version, "points": {}, "memory_status": memory["status"]}
+    if memory["status"] == "ready" and memory.get("affected_keys"):
+        index_path = state / "personal-summary/current.json"
+        index_sha = file_sha256(index_path)
+        routes = load_json(index_path)["routes"]
+        db, manifest = open_memory_projection(state)
+        generation = manifest["generation"]
+        if manifest["summary_index_sha256"] != index_sha:
+            db.close()
+            raise ValidationError("native memory generation differs from current summary index")
+        with closing(db):
+            for key in sorted(set(memory["affected_keys"])):
+                row = db.execute("SELECT summary_sha256, answer_safe FROM points WHERE point_key=?", (key,)).fetchone()
+                expected = routes.get(key_hash(key), {}).get("sha256")
+                if not row or not expected or row["summary_sha256"] != expected:
+                    raise ValidationError("native memory summary identity mismatch:" + key)
+                output = query_memory_context(repo, state, keys=[key], view="teaching", max_bytes=16384)
+                if (output.get("generation") != generation or output.get("summary_index_sha256") != index_sha
+                        or not output.get("coverage", {}).get("projection_available")):
+                    raise ValidationError("native memory readback version mismatch:" + key)
+                matches = output.get("matched", [])
+                invalidation = {"key": key, "reason": "invalidated_summary_requires_refresh"}
+                if not matches and output.get("status") == "pending" and output.get("pending") == [invalidation]:
+                    visibility = "invalidated"
+                elif row["answer_safe"]:
+                    if (output.get("status") != "ready" or len(matches) != 1 or matches[0].get("key") != key
+                            or matches[0].get("summary_sha256") != expected
+                            or matches[0].get("visibility") != "answer_free"
+                            or not matches[0].get("latest_observation")):
+                        raise ValidationError("native teaching summary not available:" + key)
+                    visibility = "answer_free"
+                else:
+                    if matches or not any(item.get("key") == key and item.get("reason") == "protected"
+                                          for item in output.get("unavailable", [])):
+                        raise ValidationError("native teaching answer protection failed:" + key)
+                    visibility = "withheld"
+                result["points"][key] = {"summary_sha256": expected, "teaching_visibility": visibility,
+                                          "readback_sha256": object_sha256(output)}
+        current_db, current = open_memory_projection(state)
+        with closing(current_db):
+            if (current["generation"], file_sha256(index_path)) != (generation, index_sha):
+                raise ValidationError("native memory changed during readback")
+        result.update(memory_generation=generation, summary_index_sha256=index_sha)
+    if object_sha256(formal_versions(repo)) != formal_version:
+        raise ValidationError("formal version changed during native readback")
+    return result
+
+
 def complete_formal_closeout(repo_root: Path, state_dir: Path, receipt: dict[str, Any], *,
                              runner: Callable[..., dict[str, Any]] | None = None,
                              retry_publication: bool = False,
@@ -294,8 +351,19 @@ def complete_formal_closeout(repo_root: Path, state_dir: Path, receipt: dict[str
              "formal_apply_invocation_count": 0}
     if memory.get("status") != "ready":
         value.update(status="FORMAL_COMMITTED_MEMORY_PENDING", pending_component=memory.get("pending_component", "personal_summary"))
-    elif snapshot_status == "PUBLISHED":
-        value.update(status="PUBLISHED", pending_component=None)
+    else:
+        if snapshot_status == "PUBLISHED":
+            value.update(status="PUBLISHED", pending_component=None)
+        local = {"schema_version": "english_native_closeout_receipt_v1",
+                 "writer_receipt_id": receipt["receipt_id"], "writer_receipt_sha256": object_sha256(receipt),
+                 "formal_apply_invocation_count": 0, "memory": memory}
+        try:
+            local["native_teaching_readback"] = verify_native_readback(repo_root, state_dir, value["formal_version"], memory)
+            local.update(status="VERIFIED_CURRENT", verification_basis="native_teaching_readback", pending_component=None)
+        except (OSError, ValueError, KeyError, sqlite3.Error, ValidationError) as exc:
+            local.update(status="FORMAL_COMMITTED_CONTEXT_PENDING", pending_component="native_readback", reason=str(exc))
+            value.update(status=local["status"], pending_component=local["pending_component"])
+        value["local_quality"] = local
     if value.get("event_id"):
         try:
             atomic_write_json(state_dir / "publication" / f"{value['event_id']}.json", value)
