@@ -272,4 +272,5 @@ def query(output: Path, *, source_id: str, unit_id: str | None = None,
     if len(matches) != 1:
         raise ValidationError("reading preparation unit identity is missing or ambiguous")
     return {"schema_version": SCHEMA, "source_id": source_id, "source_hash": record["source_hash"],
+            "record_sha256": record["record_sha256"],
             "source_article": record["source_article"], "unit": matches[0], "formal_write_count": 0}

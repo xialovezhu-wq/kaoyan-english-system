@@ -45,3 +45,5 @@ Legacy audit v2 retains those rows with `actionable=false` and excludes them fro
 `needs_user`; it never labels them completed, consumed, migrated, mastered or formal.
 
 An event without authoritative hash-bound complete-conversation evidence cannot be synthesized, frozen or archived as a package. The nine events in the 2026-08-27 user_removed retirement receipt remain administrative evidence only.
+
+仅查看旧网页保留状态时运行 `plan-backlog --legacy-web-holds --no-persist`。明确指定的旧事件退役用 `english_legacy_event_retirement_v1` 绑定原事件及 Capture 回执，该凭据只记录管理操作。

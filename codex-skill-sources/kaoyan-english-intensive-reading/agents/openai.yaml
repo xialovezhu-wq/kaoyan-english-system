@@ -1,4 +1,12 @@
 interface:
-  display_name: "考研英语按点个性化精读"
-  short_description: "先诊断再按知识点哈希读取摘要；学完按需整单元保存，正式入库才更新摘要"
-  default_prompt: "Use $kaoyan-english-intensive-reading with the user's selected DeepSeek V4.1 Flash provider. Diagnose the current attempt first, query point hashes once, read and use matched summaries, and stop lookup on a miss. Capture the complete multi-turn unit only when saving is authorized. Personal summaries update only during formal intake."
+  display_name: "考研英语精读与作文专题"
+  short_description: "英语精读、错题与晚间回顾均在本地；作文逐专题学习、评分与改稿"
+  default_prompt: >-
+    Use $kaoyan-english-intensive-reading with the user's current model unless they explicitly chose another route for this task. Wait for the first translation
+    unless the learner asks for a direct explanation. Compare expressions on request and distinguish the learner's words from tutor rewrites. For a word-sense focus
+    in an authorized article sentence, use the English renderer's single-call word focus. Emphasize the decisive span in the original and its translation. Add one clue only if needed.
+    Put relevant earlier corrections and extra senses within reach, with no repeated explanation.
+    For every English teaching reply, open that lesson's HTML in the current chat's Codex browser side panel
+    and include the same inline visualization. Use the existing question tabs with per-item answer authorization. Reuse a sufficient diagram for
+    follow-ups; teach and save under their own entry points. For evening review open that day's cards;
+    for English I writing follow the existing large/small essay course and draft feedback.

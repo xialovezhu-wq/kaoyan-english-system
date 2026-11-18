@@ -1,0 +1,26 @@
+{
+  "session_id": "synthetic-negation",
+  "turns": [
+    ["source", "user", "Not every shortcut is reliable."],
+    ["first", "user", "每一种捷径都不可靠。"],
+    ["hint", "assistant", "否定的是 every 的范围。"],
+    ["ack", "user", "懂了"],
+    ["revision", "user", "并非每一种捷径都可靠。"],
+    ["direct", "user", "请直接讲解这句并比较表达。"]
+  ],
+  "request": {
+    "stage": "after_translation",
+    "source": {
+      "source_kind": "user_provided",
+      "source_id": "EN-SYN-NEGATION-001",
+      "unit_id": "S01",
+      "original_message": {"message_id": "source", "quote": "Not every shortcut is reliable."}
+    },
+    "first_attempt": {"message_id": "first", "quote": "每一种捷径都不可靠。"},
+    "first_attempt_hint_dependence": "none",
+    "suggestions": [
+      {"style": "简洁", "text": "You cannot rely on every shortcut.", "meaning_relation": "preserved", "basis": "这里的 rely on 对应 reliable，否定的范围仍是所有捷径都可靠这一判断。"},
+      {"style": "口语", "text": "You can't trust any shortcut.", "meaning_relation": "changed", "basis": "any 落在否定范围内，变成没有一条捷径可信，比原句更强。"}
+    ]
+  }
+}

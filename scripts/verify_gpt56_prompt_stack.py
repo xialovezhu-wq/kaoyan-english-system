@@ -40,8 +40,8 @@ def verify(skills_root: Path, installed_root: Path | None = None) -> dict:
             failures.append(f"missing matching UI invocation: {name}")
         for source in folder.rglob("*.md"):
             body = source.read_text(encoding="utf-8")
-            for reference in re.findall(r"\breferences/[A-Za-z0-9_.-]+\.md", body):
-                target = folder / reference
+            for owner, reference in re.findall(r"(?:(kaoyan-english-[a-z-]+)/)?\b(references/[A-Za-z0-9_.-]+\.md)", body):
+                target = (skills_root / owner if owner else folder) / reference
                 references.add(str(target))
                 if not target.is_file():
                     failures.append(f"broken reference: {name}/{reference}")

@@ -61,6 +61,11 @@ def build_parser() -> argparse.ArgumentParser:
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
 
+    comparison = subparsers.add_parser("expression-comparison", parents=[common], help="Show a source-bound translation comparison.")
+    comparison.add_argument("--input-json", default="-", help="Comparison JSON file or - for stdin.")
+    comparison.add_argument("--session-id")
+    comparison.add_argument("--rollout", type=Path)
+
     capture = subparsers.add_parser(
         "capture",
         parents=[common],
@@ -642,6 +647,9 @@ def _capture_request(args: argparse.Namespace, repo_root: Path) -> dict[str, Any
 
 
 def run(args: argparse.Namespace) -> dict[str, Any]:
+    if args.command == "expression-comparison":
+        from .expression_comparison import run as render_comparison
+        return render_comparison(args)
     state_dir = args.state_dir.resolve()
     repo_root = args.repo_root.resolve()
     deadline = None

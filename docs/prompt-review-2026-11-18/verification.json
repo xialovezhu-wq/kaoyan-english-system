@@ -1,0 +1,44 @@
+{
+  "task": "PROMPT-20261118-ENGLISH",
+  "parent": "504322fe946328ce70c1bd596886df7bb5ac4344",
+  "content": "sanitized source and synthetic example",
+  "working_and_review_cli_outputs_equal": true,
+  "cases": {
+    "before_translation": "original_only",
+    "after_translation": "original_first_attempt_preserved",
+    "model_rewrites": 2,
+    "meaning_change_disclosed": true,
+    "absent_followup": "not_observed",
+    "acknowledgment_only": "verified",
+    "prompted_revision": "verified",
+    "assistant_as_learner": "rejected",
+    "cross_source_Q21": "withheld",
+    "synthetic_formal_writes": 0,
+    "synthetic_learning_events": 0
+  },
+  "root_character_counts": {
+    "daily-intake-curation": {
+      "before": 19308,
+      "after": 1427
+    },
+    "web-return": {
+      "before": 9967,
+      "after": 829
+    }
+  },
+  "host_validation": {
+    "registered_english_skills": 6,
+    "changed_skill_bodies_in_fresh_native_request": 3,
+    "fresh_body_check_transport": "isolated loopback with no model inference",
+    "native_stack": "PASS",
+    "review_stack": "PASS",
+    "T3_automatic_rewrite_selection": "not_verified",
+    "public_view": "text comparison and copyable scoped state"
+  },
+  "review_mapping": {
+    "prompts/codex_prompt.md": "sanitized stable production rules",
+    "project_AGENTS": "absent on both project roots",
+    "user_level_AGENTS": "host-only",
+    "formal_writer_and_native_visuals": "existing production owner; not reimplemented by this change"
+  }
+}
