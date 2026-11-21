@@ -10,11 +10,9 @@ from .util import file_sha256, load_json
 
 
 def managed_package(state: Path, package: dict[str, Any]) -> bool:
-    if package.get("source_identity", {}).get("review_route") == "web":
-        return True
     hold = state / "web-review" / "holds" / (package["package_id"] + ".json")
     if not hold.exists():
-        return False
+        return package.get("source_identity", {}).get("review_route") == "web"
     row = load_json(hold)
     if row.get("package_sha256") != package["package_canonical_sha256"]:
         raise ValidationError("web review hold package hash differs")
@@ -54,7 +52,7 @@ def validate_writer_admission(state: Path, manifest: dict[str, Any], actions_pat
         return
     review_id = manifest.get("web_review_id")
     if not review_id:
-        raise ValidationError("WAITING_WEB_REVIEW: package requires its reviewed web return")
+        raise ValidationError("WAITING_WEB_REVIEW (legacy hold): use the exact native plan-local-intake, author-local-day and action binding")
     allowed = allowed_packages(state, review_id)
     for p in managed:
         if allowed.get(p["package_id"]) != p["package_sha256"]:

@@ -9,6 +9,19 @@ from .errors import IdempotencyConflict, ValidationError
 from .util import canonical_bytes, object_sha256
 
 
+def visible_content(payload: dict[str, Any]) -> tuple[str, list] | None:
+    if (payload.get("type") != "message" or payload.get("role") not in {"user", "assistant"}
+            or payload.get("channel") in {"analysis", "reasoning"} or payload.get("phase") in {"analysis", "reasoning"}
+            or payload.get("recipient") not in {None, "all"}):
+        return None
+    blocks = payload.get("content", [])
+    if not isinstance(blocks, list):
+        raise ValidationError("visible message content must be a block array")
+    text_types = {"input_text", "output_text", "text"}
+    text = "".join(block.get("text", "") for block in blocks if block.get("type") in text_types)
+    return (text, blocks) if text or any(b.get("type") not in text_types for b in blocks) else None
+
+
 def export_unit_dialogue(rollout: Path, *, turn_ids: list[str], output: Path) -> dict[str, Any]:
     """No model, inferred transcript, package write, or learning-state update.
 
@@ -41,18 +54,13 @@ def export_unit_dialogue(rollout: Path, *, turn_ids: list[str], output: Path) ->
                 current = payload.get("turn_id", current)
                 if current in selected and current not in found:
                     found.append(current)
-            if current not in selected or kind != "response_item" or payload.get("type") != "message":
+            if current not in selected or kind != "response_item":
                 continue
-            if payload.get("role") not in {"user", "assistant"}:
+            visible = visible_content(payload)
+            if visible is None:
                 continue
-            blocks = payload.get("content", [])
-            if not isinstance(blocks, list):
-                raise ValidationError("rollout message content is not a block array")
-            texts = [b["text"] for b in blocks if b.get("type") in {"input_text", "output_text", "text"}]
+            content, blocks = visible
             nontext = [b for b in blocks if b.get("type") not in {"input_text", "output_text", "text"}]
-            content = "\n".join(texts)
-            if not content and not nontext:
-                continue
             non_text_count += len(nontext)
             messages.append({"role": payload["role"], "content": content,
                              "message_id": payload.get("id") or f"{current}:line-{line_number}",

@@ -240,7 +240,8 @@ def _affected_keys(repo: Path, state: Path, receipt: dict[str, Any]) -> tuple[li
                     item = row["item"]
                     for prefix in ("word", "phrase"):
                         candidates.add(normalize_key(prefix + ":" + item))
-    matched = set()
+    matched = {r["writing_binding"]["point_key"] for r in receipt.get("action_results", [])
+               if r.get("writing_contract")=="english-writing-observation/2" and r.get("result") in {"applied","skipped"}}
     for key, record in records.items():
         if {key, *record.get("aliases", [])} & candidates:
             matched.add(key)
@@ -315,8 +316,13 @@ def memory_closeout_status(state: Path, receipt_id: str | None = None) -> dict[s
         if unfinished and (not row or row.get("status") == "ready"):
             return {"status": "pending", "pending_component": unfinished[0].get("pending_component", "personal_summary"),
                     "receipt_id": receipt_id, "formal_write_count": 0}
-        return _public_receipt(row) if row else {"status": "LEGACY_NOT_REQUIRED", "pending_component": None,
-                                                 "receipt_id": receipt_id, "formal_write_count": 0}
+        result = _public_receipt(row) if row else {"status": "LEGACY_NOT_REQUIRED", "pending_component": None,
+                                                  "receipt_id": receipt_id, "formal_write_count": 0}
+        from .sentence_visuals import stage_status
+        teaching = stage_status(state, receipt_id)
+        if teaching:
+            result["sentence_teaching"] = teaching
+        return result
     pending = [_public_receipt(row) for row in lifecycle["pending_receipts"].values() if row.get("status") != "ready"]
     publications = list(lifecycle.get("pending_publications", {}).values())
     transactions = list(lifecycle.get("pending_transactions", {}))
@@ -340,7 +346,7 @@ def _learner_episode(repo: Path, state: Path, episode: dict[str, Any], formal_re
     from .personal_summary import _is_archive_evidence, _validate_archive_evidence, _validate_archive_locator
     for ref in episode.get("evidence", []):
         if _is_archive_evidence(ref):
-            if _validate_archive_evidence(repo, state, ref, formal_receipt):
+            if _validate_archive_evidence(repo, state, ref, formal_receipt, attempt=episode["first_attempt"]):
                 return True
             continue
         path = (repo / ref.get("path", "")).resolve()
@@ -353,7 +359,7 @@ def _learner_episode(repo: Path, state: Path, episode: dict[str, Any], formal_re
         bound = dict(zip((formal_receipt or {}).get("package_ids", []), (formal_receipt or {}).get("package_sha256s", [])))
         if bound.get(manifest.get("package_id")) != manifest.get("package_canonical_sha256"):
             continue
-        if _validate_archive_locator(path, ref.get("locator")):
+        if _validate_archive_locator(path, ref.get("locator"), attempt=episode["first_attempt"]):
             return True
     return False
 
@@ -382,6 +388,18 @@ def _episode_covers_package(repo: Path, state: Path, episode: dict[str, Any], pi
                 and file_sha256(path) == ref["sha256"]):
             return True
     return False
+
+
+def _episode_withdrawal_closure(episodes, roots):
+    withdrawn = set(roots)
+    if withdrawn:
+        while True:
+            dependents = {eid for eid, owners in episodes.items() if eid not in withdrawn
+                          and any(ep.get("source_episode_id") in withdrawn for _, ep in owners)}
+            if not dependents:
+                break
+            withdrawn.update(dependents)
+    return withdrawn
 
 
 def preflight_summary_memory(repo: Path, state: Path, document: dict[str, Any], records: dict[str, dict[str, Any]], *,
@@ -447,8 +465,12 @@ def preflight_summary_memory(repo: Path, state: Path, document: dict[str, Any], 
         if claim["basis"] == "inference" and claim["status"] == "confirmed":
             raise ValidationError("an inference cannot become a confirmed learner fact")
         ids = evidence(claim["evidence_episode_ids"])
-        if not set(ids) <= {ep["episode_id"] for ep in all_records[key]["episodes"]}:
+        point_episodes = {ep["episode_id"]: ep for ep in all_records[key]["episodes"]}
+        if not set(ids) <= point_episodes.keys():
             raise ValidationError("claim evidence must belong to its point")
+        if review is not None and (claim["basis"] == "user_explicit" or claim["status"] == "confirmed"):
+            for eid in ids:
+                review.validate_episode(point_episodes[eid], assertion=claim["content"])
         for field in ("valid_from", "valid_to"):
             if claim.get(field) is not None:
                 if not isinstance(claim[field], str):
@@ -496,8 +518,15 @@ def preflight_summary_memory(repo: Path, state: Path, document: dict[str, Any], 
         if correction["action"] == "supersede":
             if replacement not in claims or replacement in targets or replacement in invalid_claims:
                 raise ValidationError("replacement claim is missing, invalid, or cyclic")
-            if set(claims[replacement]["evidence_episode_ids"]) & set(target_episodes):
+            withdrawn = _episode_withdrawal_closure(episodes, target_episodes)
+            proposed = claims[replacement]
+            if withdrawn.intersection(proposed["evidence_episode_ids"]):
                 raise ValidationError("replacement depends on an episode being invalidated")
+            if proposed["status"] != "confirmed" or proposed["basis"] not in {"user_explicit", "observed"}:
+                if any(claim["status"] == "confirmed"
+                       and (old_id in targets or withdrawn.intersection(claim["evidence_episode_ids"]))
+                       for old_id, claim in old_claims.items()):
+                    raise ValidationError("supersede pending: confirmed claims require a confirmed non-inference replacement")
         elif replacement is not None:
             raise ValidationError("retraction must not name a replacement")
         if cid in old_corrections:
@@ -509,17 +538,10 @@ def preflight_summary_memory(repo: Path, state: Path, document: dict[str, Any], 
         if cid not in old_corrections:
             invalidated_keys.update(old_claims[x]["point_key"] for x in targets)
             invalidated_keys.update(key for eid in target_episodes for key, _ in episodes[eid])
-    # Refinement retains source_episode_id. Follow that explicit dependency,
-    # rather than trusting similarity or treating a refined copy as new proof.
-    changed = True
-    while changed:
-        changed = False
-        for key, record in all_records.items():
-            for episode in record.get("episodes", []):
-                if episode.get("source_episode_id") in invalid_episodes and episode["episode_id"] not in invalid_episodes:
-                    invalid_episodes.add(episode["episode_id"])
-                    invalidated_keys.add(key)
-                    changed = True
+    # Refinements keep the original episode as an explicit dependency.
+    withdrawn = _episode_withdrawal_closure(episodes, invalid_episodes)
+    invalidated_keys.update(key for eid in withdrawn - invalid_episodes for key, _ in episodes[eid])
+    invalid_episodes = withdrawn
     # Propagate an episode withdrawal into all dependent derived claims.
     invalid_claims.update(cid for cid, claim in claims.items() if set(claim["evidence_episode_ids"]) & invalid_episodes)
     invalidated_keys.update(claims[cid]["point_key"] for cid in invalid_claims - previously_invalid_claims if cid in claims)
@@ -683,7 +705,7 @@ def finish_summary_memory(repo: Path, state: Path, publication_id: str | None) -
             pages = publish_managed_pages(repo, state, lifecycle_override=lifecycle)
             if mirror.get("status") in {"partial", "failed", "error"} or pages.get("status") in {"partial", "failed", "error"}:
                 raise ValidationError("memory mirror or managed-page closure is incomplete")
-            row.update(status="ready", pending_component=None, memory_generation=generation,
+            row.update(status="ready", pending_component=None, memory_generation=generation, ready_at=utc_now(),
                        projection_receipt=built, mirror_receipt=mirror, pages_receipt=pages)
             row.pop("last_error", None)
             atomic_write_json(path, row)

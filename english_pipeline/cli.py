@@ -61,6 +61,29 @@ def build_parser() -> argparse.ArgumentParser:
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
 
+    comparison = subparsers.add_parser("expression-comparison", parents=[common], help="Show a source-bound translation comparison.")
+    comparison.add_argument("--input-json", default="-", help="Comparison JSON file or - for stdin.")
+    comparison.add_argument("--session-id")
+    comparison.add_argument("--rollout", type=Path)
+    comparison.add_argument("--save-display-receipt", action="store_true",
+                            help="Bind this display to the current native thread for a later user paste.")
+    comparison.add_argument("--origin-message-id", help="Actual current user message for a saved display.")
+    comparison.add_argument("--replaces-scene-ref", help="Expected active receipt when replacing a display in the same turn.")
+
+    selection = subparsers.add_parser("expression-selection", help="Resolve one copied state from the current user turn.")
+    selection.add_argument("--scene-ref", help="Expected program-issued receipt ID; defaults to the thread's active reference.")
+    selection.add_argument("--selection-message-id", help="Assert the exact ID of the current user message.")
+    selection.add_argument("--selection-json", metavar="-", help="Also compare stdin with the actual paste (only '-' is accepted).")
+    selection.add_argument("--session-id", help="Assert the native current thread ID.")
+    selection.add_argument("--current-source-kind", help="Source kind from the active English unit.")
+    selection.add_argument("--current-source-id", help="Source ID or prepared article alias from the active unit.")
+    selection.add_argument("--current-unit-id", help="Active article sentence ID.")
+    selection.add_argument("--current-stage", help="Translation stage authorized in the active unit.")
+    selection.add_argument("--current-original-message-id", help="Original source message for a user-provided sentence.")
+    selection.add_argument("--current-sentence-sha256", help="Exact current sentence hash; required for a user-provided sentence.")
+    selection.add_argument("--current-source-hash", help="Pin a known source version from the active unit.")
+    selection.add_argument("--current-record-sha256", help="Pin a known prepared sentence-location version.")
+
     capture = subparsers.add_parser(
         "capture",
         parents=[common],
@@ -141,6 +164,28 @@ def build_parser() -> argparse.ArgumentParser:
     source.add_argument("--source-article")
     source.add_argument("--all", action="store_true", help="Return the complete deterministic article source catalog.")
 
+    tense = subparsers.add_parser("render-tense-timeline", parents=[common],
+                                 help="Render explicit, current-unit English tense semantics offline.")
+    tense_input = tense.add_mutually_exclusive_group(required=True)
+    tense_input.add_argument("--examples", action="store_true")
+    tense_input.add_argument("--input-json", type=Path, help="Use - for a bounded stdin configuration.")
+    tense.add_argument("--output", type=Path)
+    tense.add_argument("--inline-root", type=Path)
+    tense.add_argument("--lesson-page", action="store_true", help="Prepare the localhost lesson for the current chat panel.")
+
+    replay = subparsers.add_parser("inspect-memory-use", parents=[common],
+                                   help="Read an existing saved unit or align its original log without writing.")
+    replay.add_argument("--package-root", type=Path, required=True)
+    replay.add_argument("--rollout", type=Path)
+    replay.add_argument("--session-id")
+
+    use_review = subparsers.add_parser("review-memory-use", parents=[common],
+                                       help="Seal a private author verdict using only actually supplied evidence.")
+    use_review.add_argument("--manifest", type=Path, required=True)
+    use_review.add_argument("--package-id", required=True)
+    use_review.add_argument("--reviewer", required=True)
+    use_review.add_argument("--input-json", type=Path, required=True)
+
     subparsers.add_parser("export-publication-sources", parents=[common], help="Return complete hash-bound English sources without publishing or changing formal data.")
     validate_package = subparsers.add_parser("validate-package", parents=[common], help="Read and validate one complete immutable package without writing or importing it.")
     validate_package.add_argument("--package-root", type=Path, required=True)
@@ -165,6 +210,39 @@ def build_parser() -> argparse.ArgumentParser:
 
     from .memory_cli import add_memory_commands
     add_memory_commands(subparsers, parents=[common])
+    from .sentence_teaching_cli import add_commands as add_sentence_teaching_commands
+    add_sentence_teaching_commands(subparsers, common=common)
+
+    prepare_feedback = subparsers.add_parser("prepare-evening-feedback", parents=[common],
+        help="Read the original day's committed units and article vocabulary candidates.")
+    prepare_feedback.add_argument("--study-date", required=True)
+    publish_feedback = subparsers.add_parser("publish-evening-feedback", parents=[common],
+        help="Render the complete answer-free, author-reviewed day to one local page.")
+    publish_feedback.add_argument("--study-date", required=True)
+    publish_feedback.add_argument("--input-json", required=True, type=Path)
+    resume_feedback = subparsers.add_parser("resume-evening-feedback", parents=[common],
+        help="Read back or recover only the validated day page, without replaying formal intake.")
+    resume_feedback.add_argument("--study-date",required=True)
+    history = subparsers.add_parser("query-review-history", parents=[common],
+        help="Search current answer-free English observations across dates and articles.")
+    history.add_argument("--study-date")
+    history.add_argument("--source-id")
+    history.add_argument("--search",default="")
+    history.add_argument("--offset",type=int,default=0)
+    history.add_argument("--limit",type=int,default=8)
+    history.add_argument("--generation")
+    history.add_argument("--point-key", help="Read matching episodes of one point from a partial history result.")
+    writing = subparsers.add_parser("query-writing-expressions", parents=[common],
+        help="Rank candidate essay expressions by English I paper coverage and show reviewed template constraints.")
+    writing.add_argument("--item",action="append",default=[])
+    writing.add_argument("--theme")
+    writing.add_argument("--function")
+    writing.add_argument("--limit",type=int,default=8)
+    prompt=subparsers.add_parser("query-writing-prompt", parents=[common],
+        help="Read one English writing task without exposing an essay model answer.")
+    prompt.add_argument("--year",required=True,type=int)
+    prompt.add_argument("--part",required=True,choices=("A","B"))
+    prompt.add_argument("--paper",default="I",choices=("I","II"))
 
     publish_summary = subparsers.add_parser("publish-personal-summaries", parents=[common], help="Update point summaries only after formal intake; never from raw Capture.")
     publish_summary.add_argument("--input-json", type=Path, required=True)
@@ -193,7 +271,7 @@ def build_parser() -> argparse.ArgumentParser:
     freeze.add_argument("--local-review-id")
 
     backlog_plan = subparsers.add_parser(
-        "plan-backlog",
+        "plan-backlog", aliases=["plan-local-intake"],
         parents=[common],
         help="Create a canonical pending-package plan through a Shanghai cutoff date.",
     )
@@ -201,9 +279,22 @@ def build_parser() -> argparse.ArgumentParser:
     backlog_plan.add_argument("--only-today", action="store_true")
     backlog_plan.add_argument("--package-id", action="append", default=[])
     backlog_plan.add_argument("--local-review-id")
+    backlog_plan.add_argument("--legacy-web-holds", action="store_true", help="Inspect the earlier web-only cutoff behavior for a named historical workflow.")
     backlog_plan.add_argument("--output", type=Path)
     backlog_plan.add_argument("--no-legacy-audit", action="store_true")
     backlog_plan.add_argument("--no-persist", action="store_true")
+
+    author = subparsers.add_parser("author-local-day", parents=[common],
+        help="Collect verified local evidence and resume per-package decisions in the current session.")
+    author.add_argument("--manifest", type=Path, required=True)
+    author.add_argument("--reviewer", default="current_local_session")
+
+    binding = subparsers.add_parser("bind-local-actions", parents=[common],
+        help="Seal the reviewed typed decisions for this exact local worklist and daily freeze.")
+    binding.add_argument("--local-review-id", required=True)
+    binding.add_argument("--manifest", type=Path, required=True)
+    binding.add_argument("--actions", type=Path, required=True)
+    binding.add_argument("--reviewer", required=True)
 
     legacy_audit = subparsers.add_parser(
         "audit-legacy-events",
@@ -299,6 +390,8 @@ def build_parser() -> argparse.ArgumentParser:
     support_query.add_argument("--sentence-sha256")
     support_query.add_argument("--max-records", type=int, default=64)
     support_query.add_argument("--max-bytes", type=int, default=16 * 1024)
+    support_query.add_argument("--include-evidence", action="store_true",
+                               help="Read the exact, source-verified attempt for one sentence.")
 
     recover = subparsers.add_parser("recover-nightly", parents=[common], help="Recover an interrupted prepared formal transaction under the writer lock.")
     recover.add_argument("--retry-publication", action="store_true", help="Explicitly retry the existing final publication without repeating formal apply.")
@@ -642,13 +735,73 @@ def _capture_request(args: argparse.Namespace, repo_root: Path) -> dict[str, Any
 
 
 def run(args: argparse.Namespace) -> dict[str, Any]:
+    if args.command == "expression-comparison":
+        from .expression_comparison import run as render_comparison
+        return render_comparison(args)
+    if args.command == "expression-selection":
+        from .expression_comparison import run_selection
+        return run_selection(args)
+    from .sentence_teaching_cli import COMMANDS as SENTENCE_TEACHING_COMMANDS, run as run_sentence_teaching
+    if args.command in SENTENCE_TEACHING_COMMANDS:
+        return run_sentence_teaching(args)
     state_dir = args.state_dir.resolve()
     repo_root = args.repo_root.resolve()
+    if args.command == "prepare-evening-feedback":
+        from .evening_feedback import article_groups
+        scope, groups = article_groups(repo_root, state_dir, args.study_date, candidates=True)
+        return {**scope, "groups": list(groups.values()), "formal_write_count": 0}
+    if args.command == "publish-evening-feedback":
+        from .evening_feedback import publish_day
+        return publish_day(repo_root, state_dir, args.study_date, load_json(args.input_json))
+    if args.command == "resume-evening-feedback":
+        from .evening_feedback import resume_day
+        return resume_day(repo_root,state_dir,args.study_date)
+    if args.command == "query-review-history":
+        from .review_history import history_page
+        return history_page(repo_root, state_dir, day=args.study_date, source=args.source_id,
+                            search=args.search, offset=args.offset, limit=args.limit, generation=args.generation,
+                            point_key=args.point_key)
+    if args.command == "query-writing-expressions":
+        from .evening_feedback import writing_expressions
+        return writing_expressions(repo_root,items=args.item,theme=args.theme,function=args.function,limit=args.limit)
+    if args.command == "query-writing-prompt":
+        from .evening_feedback import writing_prompt
+        return writing_prompt(repo_root,args.year,args.part,args.paper)
     deadline = None
     if args.command in {"capture", "recover-segment-gate"}:
         if not 1 <= args.budget_ms <= 40000:
             raise ValidationError("local capture/recovery budget must be 1 through 40000 ms")
         deadline = time.monotonic() + args.budget_ms / 1000
+    if args.command == "render-tense-timeline":
+        from .teaching_visuals import INPUT_SCHEMA, example_cases, render
+        if args.examples:
+            cases = example_cases()
+        else:
+            if args.input_json == Path("-"):
+                raw = sys.stdin.buffer.read(32769)
+            else:
+                with args.input_json.open("rb") as handle:
+                    raw = handle.read(32769)
+            if len(raw) > 32768:
+                raise ValidationError("tense input exceeds 32768 bytes")
+            request = json.loads(raw)
+            if not isinstance(request, dict) or request.get("schema_version") != INPUT_SCHEMA:
+                raise ValidationError("invalid tense timeline schema")
+            cases = request.get("cases")
+        return render(repo_root, cases, args.output, args.inline_root, lesson_page=getattr(args, "lesson_page", False))
+    if args.command == "inspect-memory-use":
+        from .memory_use import replay
+        return replay(repo_root, state_dir, args.package_root, rollout=args.rollout, session_id=args.session_id)
+    if args.command == "review-memory-use":
+        from .memory_use import review
+        with args.input_json.open("rb") as handle:
+            payload = handle.read(8193)
+        if len(payload) > 8192:
+            raise ValidationError("memory-use author labels exceed 8192 bytes")
+        value = json.loads(payload)
+        if not isinstance(value, dict):
+            raise ValidationError("memory-use author labels require a JSON object")
+        return review(state_dir, args.manifest, args.package_id, args.reviewer, value.get("use_observations"))
     if args.command == "validate-package":
         from .packages import validate_conversation_package, read_package_receipt
         package = validate_conversation_package(args.package_root)
@@ -717,7 +870,14 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
             verified = build_parser().parse_args(["validate-formal-receipt", "--repo-root", str(repo_root),
                                                  "--state-dir", str(state_dir), "--writer-receipt", str(args.writer_receipt)])
             receipt = run(verified)
-        return publish_personal_summaries(repo_root, state_dir, load_json(args.input_json),
+        proposal=load_json(args.input_json)
+        if args.writer_receipt:
+            from .writing_author import applies,profile_document
+            writer=load_json(args.writer_receipt)
+            if applies(state_dir,writer):
+                proposal=profile_document(repo_root,state_dir,receipt,writer,proposal)
+                if proposal is None:raise ValidationError("writing and shared knowledge summaries need complete original coverage")
+        return publish_personal_summaries(repo_root, state_dir, proposal,
                                           formal_receipt=receipt,
                                           bootstrap_existing_formal=args.bootstrap_existing_formal,
                                           source_review=load_json(args.source_review_manifest) if args.source_review_manifest else None)
@@ -759,13 +919,21 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
             repo_root=repo_root,
         )
     if args.command == "freeze-nightly":
+        requested = set(args.package_id) if args.package_id else None
+        local_id = args.local_review_id
+        if not local_id:
+            # Older operator instructions may enter directly at the dated
+            # freeze. Bind the same pending scope the local author would use.
+            _, local_plan = build_backlog_plan(state_dir, repo_root, cutoff_date=args.study_date,
+                    only_today=True, package_ids=args.package_id, include_legacy_audit=False, local_authoring=True)
+            local_id = local_plan.get("local_review_id")
+            requested = {row["package_id"] for row in local_plan["packages"] if row["status"] == "pending"}
         path, manifest = freeze_nightly(
             state_dir,
             repo_root,
             study_date=args.study_date,
             output=args.output,
-            package_ids=set(args.package_id) if args.package_id else None,
-            local_review_id=args.local_review_id,
+            package_ids=requested, local_review_id=local_id,
         )
         return {
             "schema_version": "english_freeze_receipt_v1",
@@ -773,13 +941,25 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
             "batch_id": manifest["batch_id"],
             "study_date": manifest["study_date"],
             "manifest": str(path),
+            **({"local_review_id": local_id, "next_action": "author-local-day"} if local_id else {}),
             "package_count": len(manifest["package_documents"]),
             "package_ids": manifest["package_ids"],
             "package_sha256s": manifest["package_sha256s"],
             "formal_write_count": 0,
             "formal_writeback": "none",
         }
-    if args.command == "plan-backlog":
+    if args.command == "author-local-day":
+        from .local_review import author_local_day
+        return author_local_day(state_dir, args.manifest, args.reviewer, repo=repo_root)
+    if args.command == "bind-local-actions":
+        from .local_review import bind_reviewed_actions
+        row = bind_reviewed_actions(state_dir, local_review_id=args.local_review_id, manifest_path=args.manifest,
+                                   actions_path=args.actions, reviewer=args.reviewer)
+        return {"status": "LOCAL_ACTIONS_BOUND", "local_review_id": row["local_review_id"],
+                "batch_id": row["batch_id"], "review_sha256": row["review_sha256"], "formal_write_count": 0}
+    if args.command in {"plan-backlog", "plan-local-intake"}:
+        if args.command == "plan-local-intake" and args.legacy_web_holds:
+            raise ValidationError("plan-local-intake uses the native local route")
         path, plan = build_backlog_plan(
             state_dir,
             repo_root,
@@ -787,6 +967,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
             only_today=args.only_today,
             package_ids=args.package_id,
             local_review_id=args.local_review_id,
+            local_authoring=not (args.legacy_web_holds or args.local_review_id),
             include_legacy_audit=not args.no_legacy_audit,
             persist=not args.no_persist,
             output=args.output,
@@ -842,9 +1023,13 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
             writer_receipt_path=args.writer_receipt,
             proposal_path=args.proposal,
         )
-        return {**receipt, "receipt_path": str(path)}
+        from .sentence_visuals import stage_status
+        return {**receipt, "receipt_path": str(path),
+                "sentence_teaching": stage_status(state_dir, receipt["writer_receipt_id"])}
     if args.command == "query-sentence-support":
-        return query_sentence_support(
+        if args.include_evidence and not args.sentence_id:
+            raise ValidationError("sentence evidence requires an exact sentence ID")
+        result = query_sentence_support(
             state_dir,
             source_id=args.source_id,
             sentence_id=args.sentence_id,
@@ -853,6 +1038,17 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
             max_records=args.max_records,
             max_bytes=args.max_bytes,
         )
+        if args.include_evidence and result["status"] == "ready":
+            from .sentence_visuals import query_sentence
+            scoped = query_sentence(repo_root, state_dir, args.source_id, args.sentence_id,
+                source_hash=args.source_hash, sentence_hash=args.sentence_sha256, include_evidence=True,
+                max_bytes=min(16384, args.max_bytes))
+            if scoped.get("support_record_sha256") != result["records"][0]["record_sha256"]:
+                return {**scoped, "records": [], "record_count": 0}
+            return {key: scoped[key] for key in ("source_id", "sentence_id", "source_hash",
+                    "sentence_sha256", "support_record_sha256", "evidence_bundle", "formal_write_count")
+                    if key in scoped} | {"status": "ready"}
+        return result
     if args.command == "recover-nightly":
         return recover_nightly(state_dir, repo_root, transaction_path=args.transaction, retry_publication=args.retry_publication)
     if args.command == "recover-segment-gate":
@@ -909,9 +1105,12 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 2
     except (PipelineError, OSError, ValueError, json.JSONDecodeError) as exc:
+        from .errors import FormalModelReviewPending
         command = getattr(args, "command", None)
         status = (
-            "FORMAL_COMMITTED_SUPPORT_PENDING"
+            "FORMAL_MODEL_REVIEW_PENDING"
+            if isinstance(exc, FormalModelReviewPending)
+            else "FORMAL_COMMITTED_SUPPORT_PENDING"
             if command == "refresh-sentence-support"
             else
             "FORMAL_COMMITTED_ARCHIVE_PENDING"
@@ -935,7 +1134,11 @@ def main(argv: list[str] | None = None) -> int:
             file=sys.stderr,
         )
         return 2
-    print(json.dumps(result, ensure_ascii=False, indent=2))
+    if args.command in {"query-personal-summary", "query-memory-context"}:
+        # Match the query's UTF-8 budget without adding formatting whitespace.
+        print(json.dumps(result, ensure_ascii=False, separators=(",", ":"), sort_keys=True), end="")
+    else:
+        print(json.dumps(result, ensure_ascii=False, indent=2))
     if result.get("status") in {"CAS_CONFLICT", "FAILED", "capture_saved_but_projection_failed"}:
         return 2
     return 0

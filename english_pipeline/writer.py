@@ -32,7 +32,9 @@ from .util import (
     file_sha256,
     load_json,
     normalize_item,
+    normalize_sentence,
     object_sha256,
+    parse_iso_date,
     utc_now,
     exclusive_lock,
 )
@@ -204,8 +206,15 @@ def _validate_sol_actions_v2(
             updates = action.get("updates")
             if not isinstance(updates, dict) or not updates or not set(updates).issubset(UPDATE_FIELDS):
                 raise ValidationError(f"{context} updates contain unsupported fields")
-            if "source_sentence" in updates and str(updates["source_sentence"]).casefold() not in bound_text:
-                raise ValidationError(f"{context} corrected source sentence is absent from raw evidence")
+            if "source_sentence" in updates:
+                sentence = updates["source_sentence"]
+                if not isinstance(sentence, str) or not normalize_sentence(sentence) or not any(
+                    ref["binding"]["pointer"] == "source.json#/identity/source_sentence"
+                    and isinstance(ref["value"], str)
+                    and normalize_sentence(ref["value"]) == normalize_sentence(sentence)
+                    for ref in refs
+                ):
+                    raise ValidationError(f"{context} corrected source sentence must match the frozen source sentence")
             if "meaning" in updates and (not str(updates["meaning"]).strip() or str(updates["meaning"]).casefold() not in bound_text):
                 raise ValidationError(f"{context} corrected meaning is absent from raw evidence")
         elif kind == "mastered_insert":
@@ -520,6 +529,15 @@ def _simulate(
             result["assigned_id"] = record["event_id"]
             result["learning_event_sha256"] = record["record_sha256"]
             result["learning_event_visibility"] = action["_learning_visibility"]
+            if "writing_memory" in event:
+                w = event["writing_memory"]
+                result["writing_contract"] = w["version"]
+                result["writing_binding"] = {k:w[k] for k in ("point_key","stage","attempt_id","message_id")}
+            if "writing" in event:
+                w = event["writing"]
+                result["writing_contract"] = w["contract"]
+                result["writing_binding"] = {k:w[k] for k in ("lesson_sha256", "asset_id", "direction", "phase")}
+                result["writing_binding"].update(source_id=event["source_id"], unit_id=event["unit_id"])
             result["learning_event_targets"] = {
                 "vocabulary": sorted(set(event["bank_ids"]) | {key[5:] for key in event["concept_ids"] if key.startswith("bank:")}),
                 "sentence_patterns": sorted(set(event["sentence_pattern_ids"]) | {key[3:] for key in event["concept_ids"] if key.startswith("sp:")}),
@@ -530,7 +548,7 @@ def _simulate(
                 continue
             # Only actual learning evidence changes eligibility. A's proposal
             # acceptance/rejection is retained without inventing learner mastery.
-            if event["kind"] in {"answer", "review"}:
+            if not ({"writing","writing_memory"} & event.keys()) and event["kind"] in {"answer", "review"}:
                 status_event = (
                     "reactivate_for_review" if event["outcome"] == "incorrect" or event["reasoning_status"] == "invalid"
                     else "independent_mastery_confirmed"
@@ -543,7 +561,8 @@ def _simulate(
                         if bank_row["id"] in affected:
                             review_records.append(append_review_status_record(
                                 review_records, event_type=status_event, item=bank_row["item"], bank_id=bank_row["id"],
-                                study_date=study_date, source_capture_event_ids=[ref["package_id"] for ref in action["evidence_refs"]],
+                                study_date=parse_iso_date(event["observed_at"]),
+                                source_capture_event_ids=[ref["package_id"] for ref in action["evidence_refs"]],
                                 sentence_evidence=[{"learning_event_id": record["event_id"], "user_response": event["user_response"]}],
                                 reason=action["reason"],
                                 observed_at=event["observed_at"],
@@ -664,8 +683,22 @@ def apply_nightly(
     from .web_review_gate import validate_writer_admission
     validate_writer_admission(state_dir, manifest, actions_path)
     validate_sol_actions(actions_doc, manifest, manifest_sha)
+    if apply:
+        from .writing_author import require_reviewed_capture
+        require_reviewed_capture(manifest,actions_path,state_dir)
     if apply and authorization != manifest["batch_id"]:
         raise AuthorizationError("apply requires --authorization equal to the exact frozen batch_id")
+    model_review_required = False
+    if apply and manifest.get("schema_version") == "english_nightly_manifest_v3" and manifest["package_documents"]:
+        from .formal_model_review import formal_model_review_enabled, prepare_formal_model_review
+        model_review_required = formal_model_review_enabled(state_dir)
+    if apply:
+        from .backlog import _existing_closeout_for_batch
+        committed = _existing_closeout_for_batch(state_dir, manifest, actions_doc["action_set_id"])
+        if committed:
+            if committed[1]["actions_sha256"] != actions_sha:
+                raise ValidationError("committed action set has different bytes")
+            return committed
     support_preflight_binding: dict[str, Any] | None = None
     if apply and manifest.get("schema_version") == "english_nightly_manifest_v3":
         from .sentence_support import (
@@ -704,16 +737,32 @@ def apply_nightly(
     ).resolve()
     if "learning_events" in manifest.get("formal_snapshot", {}):
         formal_paths["learning_events"] = learning_events_path(repo_root).resolve()
+    expected = {name: manifest["formal_snapshot"][name]["sha256"] for name in formal_paths}
+    model_review = None
+    # Hash before calling a provider. The writer repeats the CAS under its
+    # original lock, so reviewing a draft cannot race a different commit.
+    if (model_review_required and not _open_transaction_paths(state_dir)
+            and {name: _optional_file_sha256(path) for name, path in formal_paths.items()} == expected):
+        model_review = prepare_formal_model_review(state_dir, repo_root, manifest, actions_doc,
+                                                   manifest_sha, actions_sha)
+    evidence_binding = dict(support_preflight_binding or {})
+    if model_review:
+        evidence_binding["formal_model_review"] = model_review
 
     with exclusive_lock(lock_path):
         pending_transactions = _open_transaction_paths(state_dir)
         if pending_transactions:
             raise ValidationError(f"recovery_required: open formal transactions {pending_transactions}")
+        if apply:
+            committed = _existing_closeout_for_batch(state_dir, manifest, actions_doc["action_set_id"])
+            if committed:
+                if committed[1]["actions_sha256"] != actions_sha:
+                    raise ValidationError("committed action set has different bytes")
+                return committed
         prehashes = {
             name: _optional_file_sha256(path)
             for name, path in formal_paths.items()
         }
-        expected = {name: manifest["formal_snapshot"][name]["sha256"] for name in formal_paths}
         _append_journal(journal_path, receipt_id, "started", {"mode": mode, "prehashes": prehashes})
         if prehashes != expected:
             receipt = {
@@ -737,11 +786,19 @@ def apply_nightly(
                 "formal_write_count": 0,
                 "action_results": [],
                 "validation": {"status": "FAIL", "reason": "formal prehash drift", "expected": expected},
-                **(support_preflight_binding or {}),
+                **evidence_binding,
             }
             _append_journal(journal_path, receipt_id, "cas_conflict", receipt["validation"])
             atomic_write_json(receipt_path, receipt)
             return receipt_path, receipt
+        if model_review_required and not model_review:
+            raise ValidationError("formal model review pre-transaction binding is missing; resume this batch")
+        if model_review_required:
+            if file_sha256(manifest_path) != manifest_sha or file_sha256(actions_path) != actions_sha:
+                raise ValidationError("formal draft changed while preparing model review")
+            # Source packages are immutable by contract. Recheck the bytes
+            # after network work before using the already resolved action set.
+            validate_sol_actions(load_json(actions_path), manifest, manifest_sha)
 
         master_rows = read_csv(formal_paths["master_bank"], MASTER_HEADER)
         mastered_rows = read_csv(formal_paths["mastered_items"], MASTERED_HEADER)
@@ -848,7 +905,7 @@ def apply_nightly(
                 "safe_action_count": safe_count,
                 "unresolved_count": unresolved_count,
                 "receipt_path": str(receipt_path),
-                **(support_preflight_binding or {}),
+                **evidence_binding,
                 "replaced": [],
             }
             atomic_write_json(transaction_path, transaction)
@@ -966,8 +1023,11 @@ def apply_nightly(
             "workflow_status": (
                 "FORMAL_COMMITTED_SUPPORT_PENDING" if apply else status
             ),
-            **(support_preflight_binding or {}),
+            **evidence_binding,
         }
+        if apply:
+            from .publication import LOCAL_QUALITY_POLICY
+            receipt["local_quality_policy"] = LOCAL_QUALITY_POLICY
         atomic_write_json(receipt_path, receipt)
         if apply and fault_after_receipt:
             raise SimulatedWriterCrash(str(receipt_path))
@@ -1053,6 +1113,8 @@ def _validate_recovery_commit_binding(
             raise ValidationError(
                 "recovery committed support preflight binding mismatch"
             )
+        if transaction.get("formal_model_review") != receipt.get("formal_model_review"):
+            raise ValidationError("recovery committed formal model review binding mismatch")
         preflight_path = Path(
             str(receipt.get("support_preflight_receipt_path") or "")
         )
@@ -1258,22 +1320,36 @@ def recover_nightly(
             recovered.append({"transaction": str(path), "status": "RECOVERED_ROLLBACK"})
     from .publication import complete_formal_closeout
     from .archive import retry_archived_publication
-    publication_results = []
+    from .sentence_visuals import refresh_after_support
+    publication_results, teaching_results = [], []
     for receipt, receipt_path in closed_receipts:
+        stage = refresh_after_support(repo_root, state_dir, receipt)
+        if stage["status"] != "not_required":
+            teaching_results.append({"writer_receipt_id": receipt["receipt_id"], **{
+                key: stage[key] for key in ("status", "reason", "generation", "components") if key in stage
+            }})
         final = retry_archived_publication(state_dir, repo_root, receipt, writer_receipt_path=receipt_path,
             publication_runner=publication_runner, retry_publication=retry_publication)
         publication_results.append(final["publication"] if final is not None else
             complete_formal_closeout(repo_root, state_dir, receipt, runner=publication_runner,
                                     retry_publication=retry_publication))
-    publication_pending = any(row.get("status") not in {"PUBLISHED", "NOT_PRODUCTION_REPO"}
-                              for row in publication_results)
+    local_results = [row["local_quality"] for row in publication_results]
+    local_pending = any(row.get("status") != "VERIFIED_CURRENT" for row in local_results)
+    publication_pending = (retry_publication or publication_runner is not None) and any(
+        row.get("snapshot_status", row.get("status")) not in {"PUBLISHED", "NOT_PRODUCTION_REPO"}
+        for row in publication_results)
     recovery_receipt = {
         "schema_version": "english_recovery_receipt_v1",
-        "status": "PASS" if not publication_pending and not any(row["status"] in {"failed", "postformal_pending"} for row in recovered) else "PARTIAL",
+        "status": "PASS" if not local_pending and not publication_pending and not any(row["status"] in {"failed", "postformal_pending"} for row in recovered) else "PARTIAL",
         "recovered": recovered,
         "formal_write_count": 0,
         "publication": publication_results,
+        "local_quality": local_results,
     }
+    if teaching_results:
+        recovery_receipt["sentence_teaching"] = teaching_results
+        if any(row["status"] == "pending" for row in teaching_results):
+            recovery_receipt["status"] = "PARTIAL"
     receipt_id = "EN-RECOVERY-" + object_sha256({"time_ns": time.time_ns(), "recovered": recovered})[:16].upper()
     receipt_day = next((load_json(path).get("study_date") for path in candidates if path.is_file()), "unknown-date")
     receipt_path = state_dir / "receipts" / "recovery" / str(receipt_day) / f"{receipt_id}.json"

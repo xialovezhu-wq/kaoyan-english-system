@@ -14,11 +14,21 @@ from .answer_safety import contains_answer_signal
 from .errors import ValidationError
 from .memory_store import (is_answer_safe, open_memory_projection,
                            read_lifecycle, record_text, search_tokens)
-from .personal_summary import INDEX, _latest_episode, _read_record, key_hash, normalize_key, observation_time
+from .personal_summary import (INDEX, OBSERVATION_ORDER_AMBIGUOUS, _read_record, ambiguous_observation_order,
+                               key_hash, normalize_key, select_observations)
 from .util import LOCAL_ZONE, canonical_bytes, file_sha256, load_json, object_sha256
 
 QUERY_SCHEMA = "english_memory_context_v1"
 _PREFERENCE_ID = "teaching-preferences"
+_PUBLICATION_ID = re.compile(r"EN-MEMORY-[A-F0-9]{24}")
+_QUESTION_IN_UNIT = re.compile(r"(?<![A-Z0-9])Q\d+(?![A-Z0-9])", re.I)
+
+
+def _question_scope_matches(question_id: str, questions: list[str], units: list[str]) -> bool:
+    # Older full-review packages use their first question as the file-level
+    # label for a range of questions. That label establishes article scope only.
+    return set(questions) == {question_id} and all(
+        len(set(_QUESTION_IN_UNIT.findall(unit.upper()))) <= 1 for unit in units)
 
 
 def _time(value: str, *, end_of_day: bool = False) -> datetime:
@@ -42,7 +52,8 @@ def _scoped(episode: dict[str, Any], source_id: str | None, unit_id: str | None,
         def matches(binding):
             return ((not source_id or source_id in binding.get("source_ids", []))
                     and (not unit_id or unit_id in binding.get("unit_ids", []) or unit_id in binding.get("question_ids", []))
-                    and (not question_id or question_id in binding.get("question_ids", [])))
+                    and (not question_id or _question_scope_matches(
+                        question_id, binding.get("question_ids", []), binding.get("unit_ids", []))))
         return all(matches(binding) for binding in bindings)
     if source_id and (unit_id or question_id):
         return False  # A union of IDs is not proof of a source/unit pair.
@@ -50,7 +61,7 @@ def _scoped(episode: dict[str, Any], source_id: str | None, unit_id: str | None,
         return False
     if unit_id and unit_id not in episode["unit_ids"] and unit_id not in episode["question_ids"]:
         return False
-    if question_id and question_id not in episode["question_ids"]:
+    if question_id and not _question_scope_matches(question_id, episode["question_ids"], episode["unit_ids"]):
         return False
     if source_id and len(episode["source_ids"]) > 1:
         return False
@@ -59,11 +70,80 @@ def _scoped(episode: dict[str, Any], source_id: str | None, unit_id: str | None,
     return True
 
 
+def _episode_scope(row: sqlite3.Row) -> dict[str, Any]:
+    return {"source_ids": json.loads(row["source_ids_json"]), "unit_ids": json.loads(row["unit_ids_json"]),
+            "question_ids": json.loads(row["question_ids_json"]), "bindings": json.loads(row["scope_bindings_json"])}
+
+
+def _article_only(episode: dict[str, Any], source_id: str, container_id: str) -> bool:
+    bindings = episode["bindings"]
+    return bool(not episode["question_ids"] and set(episode["unit_ids"]) <= {container_id, source_id}
+                and bindings and all(
+        source_id in binding["source_ids"] and not binding["question_ids"]
+        and set(binding["unit_ids"]) <= {container_id, source_id} for binding in bindings))
+
+
+def _lexical_article(episode: dict[str, Any], source_id: str, container_id: str) -> tuple[str, str] | None:
+    """Match one unambiguous article across all verified bindings, never a question or an unscoped note."""
+    bindings = episode["bindings"]
+    if not bindings or episode["question_ids"]:
+        return None
+    families = (r"EXAM-READING-\d{4}-T\d+", r"RAW-ARTICLE-[\w-]+")
+    for pattern in families:
+        current = next((s for s in (source_id, container_id) if re.fullmatch(pattern, s)), None)
+        if not current:
+            continue
+        articles = set()
+        for binding in bindings:
+            sources = set(binding["source_ids"])
+            ids = {s for s in sources if re.fullmatch(pattern, s)}
+            if len(ids) != 1:
+                break
+            if (binding["question_ids"] or not binding["unit_ids"] or
+                    any(not (re.fullmatch(r"S\d+", unit) or
+                             (unit in sources and any(re.fullmatch(p, unit) for p in families)))
+                        for unit in binding["unit_ids"])):
+                return None
+            articles.update(ids)
+        else:
+            if len(articles) != 1:
+                return None
+            prior = articles.pop()
+            return ("same_article" if prior == current else "other_article", prior)
+    return None
+
+
+def _diagram_point(point: dict[str, Any], scope: str) -> dict[str, Any]:
+    result = {key: point[key] for key in ("key", "summary_sha256", "visibility", "retrieval_method",
+                                         "latest_observation") if key in point}
+    result.update(scope_match=scope, audit={"status": point["audit"]["status"]})
+    for field in ("claims", "contrasts", "teaching_hint", "teaching_hint_status"):
+        if point.get(field):
+            result[field] = point[field]
+    result["sources"] = [{key: value for key, value in ref.items() if key != "source_key"}
+                         for ref in point["sources"]]
+    return result
+
+
+def _episode_audits(db: sqlite3.Connection, key: str, identity: str) -> list[str]:
+    return [row[0] for row in db.execute(
+        "SELECT s.audit_json FROM sources s JOIN dependencies d ON d.source_key=s.source_key "
+        "WHERE d.point_key=? AND d.episode_id=? ORDER BY s.source_key", (key, identity))]
+
+
 def _episode_public(episode: dict[str, Any], cutoff: datetime | None = None) -> dict[str, Any]:
     allowed = ("episode_id", "study_date", "observed_at", "last_observed_at", "first_attempt", "correction",
                "later_observation", "hint_dependence", "reasoning_status", "observation_status", "next_action",
                "first_attempt_hint_dependence", "followup_status", "source_episode_id", "source_study_dates", "formal_ids")
     result = {name: episode[name] for name in allowed if name in episode}
+    if "writing_stage" in episode:
+        from .reading_writing_tasks import safe_fields
+        result["writing_task"]=safe_fields(episode)
+        if not episode.get("writing_task"):
+            for field in ("first_attempt","later_observation"):
+                if isinstance(result.get(field),str):
+                    result[field]=result[field].replace("本次换题无提示写对，已观察到独立运用。","开放迁移的作答条件待核。")
+        result.update({k:episode[k] for k in ("attempt_id","writing_stage","linked_keys") if k in episode})
     if cutoff is not None:
         limitations = []
         omitted = []
@@ -114,18 +194,24 @@ def _public_ref(audit: dict[str, Any], repo: Path, *, check_access: bool = True)
             **{name: audit["reference"][name] for name in allowed if name in audit.get("reference", {})}}
 
 
-def _claims(state: Path, key: str, episode_ids: set[str], lifecycle: dict[str, Any],
-            as_of: datetime | None, safe: bool) -> list[dict[str, Any]]:
-    path = state / "memory/claims.json"
-    if not path.exists():
-        return []
+def _load_claims(state: Path) -> dict[str, Any]:
     try:
-        document = load_json(path)
-        claims = document.get("claims", {})
-        if not isinstance(claims, dict):
-            return []
+        claims = load_json(state / "memory/claims.json").get("claims", {})
     except (OSError, ValueError):
-        return []
+        return {}
+    return claims if isinstance(claims, dict) else {}
+
+
+def _claims_by_point(claims: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    groups: dict[str, dict[str, Any]] = {}
+    for claim_id, claim in claims.items():
+        if isinstance(claim, dict) and isinstance(claim.get("point_key"), str):
+            groups.setdefault(claim["point_key"], {})[claim_id] = claim
+    return groups
+
+
+def _claims(claims: dict[str, Any], key: str, episode_ids: set[str], lifecycle: dict[str, Any],
+            as_of: datetime | None, safe: bool) -> list[dict[str, Any]]:
     target_time = as_of or datetime.now(timezone.utc)
     invalid = set(lifecycle.get("invalidated_claim_ids", []))
     result = []
@@ -177,6 +263,17 @@ def _public_payload(result: dict[str, Any]) -> dict[str, Any]:
     matched = []
     for original in result["matched"]:
         point = {key: value for key, value in original.items() if not key.startswith("_")}
+        episode_ids = {episode["episode_id"] for episode in point.get("episodes", [])}
+        if "latest_observation" in point:
+            episode_ids.add(point["latest_observation"]["episode_id"])
+        omitted = 0
+        for field, dependency in (("claims", "evidence_episode_ids"), ("contrasts", "source_episode_ids")):
+            if field in point:
+                delivered = [item for item in point[field] if set(item.get(dependency, [])) <= episode_ids]
+                omitted += len(point[field]) - len(delivered)
+                point[field] = delivered
+        if omitted:
+            point["dependent_items_omitted"] = omitted
         sources = point.get("sources")
         if sources:
             documents = {}
@@ -204,6 +301,11 @@ def _fit(result: dict[str, Any], max_bytes: int) -> dict[str, Any]:
     """Fit complete observations and preference sections, never sliced claims."""
     temporal_omissions = Counter()
     unknown_time = False
+    ambiguous_count = (sum(item.get("reason") == OBSERVATION_ORDER_AMBIGUOUS for item in result["unavailable"])
+                       + sum("observation_order" in point for point in result["matched"]))
+    ambiguity = {"observation_order_ambiguous_count": ambiguous_count} if ambiguous_count else {}
+    if ambiguity:
+        result = {**result, "coverage": {**result["coverage"], **ambiguity}}
     for point in result["matched"]:
         for episode in point.get("episodes", []):
             temporal_omissions.update(episode.get("temporal_fields_omitted", []))
@@ -277,6 +379,8 @@ def _fit(result: dict[str, Any], max_bytes: int) -> dict[str, Any]:
             if len(canonical_bytes(_public_payload(output))) > max_bytes:
                 output["matched"].pop()
                 output["coverage"]["points_omitted"] += 1
+                if clean.get("scope_match"):
+                    output["coverage"].setdefault("omitted_point_keys", []).append(clean["key"])
     for field in ("misses", "unavailable", "pending", "conflicts"):
         for item in result[field]:
             output[field].append(item)
@@ -288,7 +392,8 @@ def _fit(result: dict[str, Any], max_bytes: int) -> dict[str, Any]:
     if len(canonical_bytes(_public_payload(output))) > max_bytes:
         output = {"schema_version": QUERY_SCHEMA, "status": "partial", "matched": [],
                   "coverage": {"budget_limited": True, "points_omitted": len(result["matched"]),
-                               "diagnostics_omitted": sum(len(result[k]) for k in ("misses", "unavailable", "pending", "conflicts"))},
+                               "diagnostics_omitted": sum(len(result[k]) for k in ("misses", "unavailable", "pending", "conflicts")),
+                               **ambiguity},
                   "formal_write_count": 0, "history_scanned": False}
     return _public_payload(output)
 
@@ -315,19 +420,42 @@ def _state_identity(state: Path) -> tuple[Any, ...]:
     return tuple(result)
 
 
+def _published_generation(state: Path, publication_id: str, cutoff: datetime) -> dict[str, Any]:
+    path = state / "memory/publications" / f"{publication_id}.json"
+    if path.resolve() != path:
+        raise ValidationError("memory replay requires a local publication receipt")
+    receipt = load_json(path)
+    if (receipt.get("publication_id") != publication_id or receipt.get("status") != "ready"
+            or receipt.get("pending_component") is not None or not receipt.get("ready_at")):
+        raise ValidationError("memory publication lacks a proven ready timestamp")
+    generation = receipt.get("memory_generation")
+    if not isinstance(generation, str) or not re.fullmatch(r"[a-f0-9]{64}", generation):
+        raise ValidationError("memory publication lacks a valid generation")
+    if _time(receipt["ready_at"], end_of_day=True) > cutoff:
+        raise ValidationError("memory publication became ready after the cutoff")
+    return receipt
+
+
 def query_memory_context(repo: Path, state: Path, *, keys: list[str] | None = None,
                          ids: list[str] | None = None, query: str | None = None,
                          source_id: str | None = None, unit_id: str | None = None,
                          view: str = "teaching", as_of: str | None = None,
                          max_bytes: int = 6144, question_id: str | None = None,
                          unlocked_question_ids: list[str] | None = None,
-                         candidate_keys: list[str] | None = None) -> dict[str, Any]:
+                         candidate_keys: list[str] | None = None,
+                         known_publication: str | None = None, diagram: bool = False,
+                         article_container_id: str | None = None,
+                         include_evidence: bool = False) -> dict[str, Any]:
     """Return evidence-bounded context. Missing indexes never trigger builds."""
     repo, state = repo.resolve(), state.resolve()
     keys = list(dict.fromkeys(normalize_key(key) for key in (keys or [])))
     ids = list(dict.fromkeys(ids or []))
     if view not in {"teaching", "history", "audit"} or not 512 <= max_bytes <= 16384:
         raise ValidationError("memory query supports teaching/history/audit and 512..16384 bytes")
+    if diagram and (view != "teaching" or as_of or known_publication or unlocked_question_ids):
+        raise ValidationError("diagram context supports answer-free current teaching only")
+    if article_container_id and (not diagram or not source_id or not unit_id or question_id):
+        raise ValidationError("article context requires a scoped answer-free sentence diagram")
     if len(keys) > 8 or len(ids) > 8 or any(not isinstance(v, str) or not v or len(v) > 256 for v in ids):
         raise ValidationError("memory query supports at most eight keys and eight bounded IDs")
     if query is not None and (not isinstance(query, str) or not query.strip() or len(query) > 1000):
@@ -340,12 +468,41 @@ def query_memory_context(repo: Path, state: Path, *, keys: list[str] | None = No
     if unlocked_question_ids is not None and (not isinstance(unlocked_question_ids, list)
             or len(unlocked_question_ids) > 32 or any(not isinstance(x, str) or not x or len(x) > 256 for x in unlocked_question_ids)):
         raise ValidationError("unlocked question IDs must be an explicit bounded list")
+    if include_evidence and (view != "teaching" or as_of or question_id or unlocked_question_ids
+                             or not source_id or not re.fullmatch(r"S\d+", unit_id or "")):
+        raise ValidationError("memory evidence requires one current answer-free source sentence")
+    bundle_episodes = {}
     cutoff = _time(as_of, end_of_day=True) if as_of else None
+    if known_publication is not None and (
+            not isinstance(known_publication, str) or not _PUBLICATION_ID.fullmatch(known_publication) or cutoff is None
+            or view == "teaching" or query is not None):
+        raise ValidationError("known publication requires an exact key/ID, a cutoff, and history or audit view")
     natural_query = query if not (keys or ids) else None
     initial_state_identity = _state_identity(state)
     lifecycle = read_lifecycle(state)
     result = _result(view, as_of)
-    def finish(payload: dict[str, Any]) -> dict[str, Any]:
+    short_question_without_source = bool(question_id and not source_id
+                                         and re.fullmatch(r"(?:Q)?\d+(?:[-_:].*)?", question_id, re.I))
+    receipt = None
+    if known_publication:
+        result["coverage"].update(time_semantics="occurred_cutoff_with_published_generation",
+                                  known_publication=known_publication, live_safety_veto_applied=True,
+                                  historical_claims_and_preferences_available=False)
+        try:
+            receipt = _published_generation(state, known_publication, cutoff)
+        except (OSError, ValueError, TypeError, AttributeError, ValidationError):
+            result.update(status="unavailable", unavailable=[{"reason": "historical_publication_unavailable"}])
+            return _fit(result, max_bytes)
+    def changed(payload: dict[str, Any]) -> dict[str, Any]:
+        matched = [point for point in payload["matched"] if point.get("role") == "explicit_preference"]
+        return {**payload, "matched": matched, "status": "partial" if matched else "pending",
+                "pending": [*payload["pending"], {"reason": "memory_state_changed_during_query"}],
+                "coverage": {**payload["coverage"], "points_returned": len(matched)}}
+
+    def finish(payload: dict[str, Any], *, check_state: bool = False) -> dict[str, Any]:
+        stale = check_state and _state_identity(state) != initial_state_identity
+        if stale:
+            payload = changed(payload)
         # Denied identities can themselves reveal correctness (for example a
         # protected "correct-choice" point). Echo only caller-known identities.
         for field in ("unavailable", "pending", "conflicts"):
@@ -356,14 +513,31 @@ def query_memory_context(repo: Path, state: Path, *, keys: list[str] | None = No
                         item["requested_ids"] = ids
                     elif keys:
                         item["requested_keys"] = keys
-        return _fit(payload, max_bytes)
+        fit = _fit(payload, max_bytes)
+        if include_evidence and _state_identity(state) == initial_state_identity:
+            from .sentence_evidence import bundle_for_episode
+            target = next((point for point in fit["matched"] if point.get("key") in bundle_episodes), None)
+            if target is not None:
+                remaining = max_bytes - len(canonical_bytes(fit)) - 24
+                if remaining >= 512:
+                    ep = bundle_episodes[target["key"]]
+                    bundle = bundle_for_episode(repo, state, source_id, unit_id, ep, min(4096, remaining))
+                    if len(canonical_bytes(bundle)) <= remaining and _state_identity(state) == initial_state_identity:
+                        fit["evidence_bundle"] = bundle
+                if "evidence_bundle" not in fit:
+                    fit["coverage"]["evidence_bundle"] = "use_exact_sentence_or_episode_read"
+                    if len(canonical_bytes(fit)) > max_bytes:
+                        fit["coverage"].pop("evidence_bundle")
+        if include_evidence and check_state and not stale and _state_identity(state) != initial_state_identity:
+            return _fit(changed(payload), max_bytes)
+        return fit
     pref_requested = _PREFERENCE_ID in ids or "preference:" + _PREFERENCE_ID in ids
     if query and not keys and not ids and any(term in query for term in ("偏好", "答案公开", "图解", "选项按钮")):
         pref_requested = True
     if pref_requested:
         if as_of:
             result["unavailable"].append({"id": _PREFERENCE_ID, "reason": "preference_history_unavailable"})
-        elif source_id or unit_id:
+        elif source_id or unit_id or question_id:
             result["unavailable"].append({"id": _PREFERENCE_ID, "reason": "preference_scope_unavailable"})
         else:
             pref = _preference(state, query)
@@ -386,13 +560,40 @@ def query_memory_context(repo: Path, state: Path, *, keys: list[str] | None = No
         result["status"] = "unavailable"
         return finish(result)
     try:
-        db, manifest = open_memory_projection(state)
+        db, manifest = open_memory_projection(state, known_generation=receipt["memory_generation"] if receipt else None)
     except (OSError, ValueError, sqlite3.Error, ValidationError) as exc:
+        if receipt:
+            result.update(status="unavailable", unavailable=[{"reason": "historical_generation_unavailable"}])
+            return finish(result)
         result["coverage"]["degraded"] = "memory_projection_unavailable"
         result["coverage"]["projection_error"] = type(exc).__name__
+        if (state / "memory/current.json").exists() or (state / "memory/generations").is_dir():
+            # A plain summary cannot carry a previously published source or visibility veto.
+            result["status"] = "partial" if result["matched"] else "unavailable"
+            result["unavailable"].append({"reason": "published_source_audit_unavailable"})
+            result["coverage"]["points_returned"] = len(result["matched"])
+            return finish(result)
+        if diagram:
+            result.update(status="unavailable", unavailable=[{"reason": "diagram_projection_unavailable"}])
+            return finish(result)
         return finish(_fallback_exact(state, summary_index, keys, ids, result, lifecycle, view, cutoff,
-                               source_id, unit_id, question_id, unlocked_question_ids, max_bytes))
+                               source_id, unit_id, question_id, unlocked_question_ids, max_bytes), check_state=True)
+    live_db = None
     try:
+        if receipt:
+            try:
+                consistent_time = _time(manifest["created_at"], end_of_day=True) <= _time(receipt["ready_at"], end_of_day=True)
+            except (KeyError, TypeError, ValueError, AttributeError):
+                consistent_time = False
+            if receipt.get("summary_index_sha256") != manifest["summary_index_sha256"] or not consistent_time:
+                result.update(status="unavailable", unavailable=[{"reason": "historical_generation_not_bound_to_publication"}])
+                return finish(result)
+            try:
+                live_db, _ = open_memory_projection(state)
+            except (OSError, ValueError, sqlite3.Error, ValidationError):
+                result.update(status="unavailable", unavailable=[{"reason": "published_source_audit_unavailable"}])
+                return finish(result)
+            result["coverage"]["publication_ready_at"] = receipt["ready_at"]
         result["generation"] = manifest["generation"]
         result["summary_index_sha256"] = manifest["summary_index_sha256"]
         result["coverage"]["projection_available"] = True
@@ -418,6 +619,11 @@ def query_memory_context(repo: Path, state: Path, *, keys: list[str] | None = No
         # Known keys that miss never silently turn into guesses. Natural queries
         # are a distinct, explicit lookup mode.
         native = _natural_candidates(db, natural_query, source_id, unit_id, cutoff) if natural_query else []
+        if natural_query and view == "history" and not cutoff:
+            from .writing_history import first_draft_candidates
+            for point,ident in first_draft_candidates(state,manifest["generation"],natural_query):
+                candidates.append((point,False,"writing_task_locator"))
+                requested_episodes.setdefault(point,set()).add(ident)
         candidates.extend(item for item in native if item[2] == "exact_label_candidate")
         for key in ((candidate_keys or []) if natural_query else [])[:64]:
             try:
@@ -426,6 +632,7 @@ def query_memory_context(repo: Path, state: Path, *, keys: list[str] | None = No
                 continue
         candidates.extend(item for item in native if item[2] != "exact_label_candidate")
         seen, eligible = set(), 0
+        claims = None
         for key, exact, method in candidates:
             if key in seen:
                 continue
@@ -439,7 +646,8 @@ def query_memory_context(repo: Path, state: Path, *, keys: list[str] | None = No
                 if exact:
                     result["unavailable"].append({"key": key, "reason": "invalid_or_missing_summary"})
                 continue
-            current = summary_index["routes"].get(key_hash(key))
+            current = ({"sha256": row["summary_sha256"]} if receipt
+                       else summary_index["routes"].get(key_hash(key)))
             if not current or current.get("sha256") != row["summary_sha256"]:
                 result["pending"].append({"key": key, "reason": "summary_generation_pending"})
                 continue
@@ -463,8 +671,11 @@ def query_memory_context(repo: Path, state: Path, *, keys: list[str] | None = No
             question_bound = bool(json.loads(row["question_ids_json"]))
             protected = not bool(row["answer_safe"]) or not is_answer_safe(record, question_bound=question_bound)
             authorized = exact and bool(question_id) and question_id in (unlocked_question_ids or [])
-            if protected and authorized and re.fullmatch(r"Q\d+(?:[-_:].*)?", question_id or "", re.I) and not source_id:
-                result["unavailable"].append({"key": key, "reason": "protected_question_requires_source_scope"})
+            if short_question_without_source:
+                if exact:
+                    reason = ("protected_question_requires_source_scope" if protected and authorized
+                              else "question_requires_source_scope")
+                    result["unavailable"].append({"key": key, "reason": reason})
                 continue
             if protected and not authorized:
                 if exact:
@@ -476,10 +687,18 @@ def query_memory_context(repo: Path, state: Path, *, keys: list[str] | None = No
             if key in lifecycle.get("invalidated_summary_keys", []) and lifecycle.get("accepted_summary_hashes", {}).get(key) != row["summary_sha256"]:
                 result["pending"].append({"key": key, "reason": "invalidated_summary_requires_refresh"})
                 continue
-            episodes = []
-            # Select identity and scope first. A teaching read fetches only the
-            # newest eligible episode body and its direct locators after filtering.
-            all_rows = db.execute("SELECT episode_id,occurred_at,ordinal,source_ids_json,unit_ids_json,"
+            if live_db is not None:
+                live_point = live_db.execute("SELECT summary_sha256,answer_safe,audit_json FROM points WHERE point_key=?",
+                                             (key,)).fetchone()
+                live_route = summary_index["routes"].get(key_hash(key), {})
+                if (live_point is None or live_point["summary_sha256"] != live_route.get("sha256")
+                        or json.loads(live_point["audit_json"])["status"] in {"conflict", "invalid_summary"}
+                        or (row["answer_safe"] and not live_point["answer_safe"])):
+                    result["unavailable"].append({"key": key, "reason": "historical_evidence_no_longer_verified"})
+                    continue
+            episodes, article_observations, other_article_observations = [], [], []
+            # Select identity and scope before reading a teaching episode body.
+            all_rows = db.execute("SELECT episode_id,occurred_at,source_ids_json,unit_ids_json,"
                                   "question_ids_json,scope_bindings_json FROM episodes WHERE point_key=?",
                                   (key,)).fetchall()
             invalid_ids = set(lifecycle.get("invalidated_episode_ids", []))
@@ -489,61 +708,92 @@ def query_memory_context(repo: Path, state: Path, *, keys: list[str] | None = No
                     continue
                 if item["episode_id"] in invalid_ids:
                     continue
-                scoped = {"source_ids": json.loads(item["source_ids_json"]), "unit_ids": json.loads(item["unit_ids_json"]),
-                          "question_ids": json.loads(item["question_ids_json"]), "bindings": json.loads(item["scope_bindings_json"])}
-                if not _scoped(scoped, source_id, unit_id, question_id if protected else None):
+                scoped = _episode_scope(item)
+                if diagram and not question_id and scoped["question_ids"]:
                     continue
                 if cutoff:
                     if not item["occurred_at"]:
                         continue
                     if _time(item["occurred_at"], end_of_day=True) > cutoff:
                         continue
-                episodes.append({"episode_id": item["episode_id"], "occurred_at": item["occurred_at"],
-                                 "ordinal": item["ordinal"], **scoped})
+                episode = {"episode_id": item["episode_id"], "occurred_at": item["occurred_at"], **scoped}
+                if _scoped(scoped, source_id, unit_id, question_id):
+                    episodes.append(episode)
+                elif (article_container_id and exact and not protected and audit.get("status") == "verified" and
+                      _article_only(scoped, source_id, article_container_id)):
+                    article_observations.append(episode)
+                elif (diagram and article_container_id and not question_id and method == "exact_key"
+                      and key.startswith(("word:", "phrase:")) and not protected
+                      and audit.get("status") == "verified"):
+                    match = _lexical_article(scoped, source_id, article_container_id)
+                    if match:
+                        episode["article_label"] = match[1]
+                        (article_observations if match[0] == "same_article" else other_article_observations).append(episode)
+            same_article = not episodes and bool(article_observations)
+            if same_article:
+                episodes = article_observations
+            other_article = not episodes and bool(other_article_observations)
+            if other_article:
+                episodes = other_article_observations
             if not episodes:
                 if exact:
-                    reason = "no_evidence_as_of" if cutoff else "no_evidence_in_scope" if source_id or unit_id or protected else "no_active_evidence"
+                    reason = "no_evidence_as_of" if cutoff else "no_evidence_in_scope" if source_id or unit_id or question_id else "no_active_evidence"
                     result["unavailable"].append({"key": key, "reason": reason})
                 continue
             eligible += 1
-            episodes.sort(key=lambda e: (observation_time(e["occurred_at"]), e["ordinal"]), reverse=True)
-            if not cutoff and not (source_id or unit_id or protected):
-                selected_id = record.get("latest_episode_id")
-                episodes.sort(key=lambda e: e["episode_id"] == selected_id, reverse=True)
             accepted = lifecycle.get("accepted_summary_hashes", {}).get(key) == row["summary_sha256"]
             if invalid_present and not accepted:
                 result["pending"].append({"key": key, "reason": "invalidated_evidence_requires_summary_refresh"})
                 continue
             filtered = len(episodes) != len(all_rows)
-            selected_episodes = episodes[:1] if teaching_only else episodes
+            group, episodes = select_observations(episodes, record if not cutoff else None)
+            ambiguous = len(group) > 1
+            if teaching_only and ambiguous:
+                if exact:
+                    result["unavailable"].append({"key": key, **ambiguous_observation_order(group)})
+                continue
+            selected_episodes = group if teaching_only else episodes
+            history_allowed = True
             for episode in selected_episodes:
                 identity = episode["episode_id"]
+                audits = _episode_audits(db, key, identity)
+                if live_db is not None:
+                    live_episode = live_db.execute(
+                        "SELECT source_ids_json,unit_ids_json,question_ids_json,scope_bindings_json "
+                        "FROM episodes WHERE point_key=? AND episode_id=?", (key, identity)).fetchone()
+                    if (live_episode is None or not _scoped(_episode_scope(live_episode), source_id, unit_id, question_id)
+                            or audits != _episode_audits(live_db, key, identity)):
+                        history_allowed = False
+                        break
                 raw = json.loads(db.execute("SELECT episode_json FROM episodes WHERE point_key=? AND episode_id=?",
                                             (key, identity)).fetchone()[0])
                 episode["raw"] = raw
-                sources = []
+                sources = [json.loads(audit) for audit in audits]
                 direct_keys = {object_sha256(ref) for ref in raw.get("evidence", []) if isinstance(ref, dict)}
-                audits = [json.loads(s[0]) for s in db.execute(
-                    "SELECT s.audit_json FROM sources s JOIN dependencies d ON d.source_key=s.source_key WHERE d.point_key=? AND d.episode_id=? ORDER BY s.source_key",
-                    (key, identity))]
                 if view != "audit":
-                    audits = [a for a in audits if a["source_key"] in direct_keys] or audits
-                sources = [_public_ref(source, repo, check_access=not teaching_only) for source in audits]
-                episode["sources"] = sources
+                    sources = [a for a in sources if a["source_key"] in direct_keys] or sources
+                episode["sources"] = [_public_ref(source, repo, check_access=not teaching_only) for source in sources]
+            if not history_allowed:
+                result["unavailable"].append({"key": key, "reason": "historical_evidence_no_longer_verified"})
+                continue
             if not protected and any(contains_answer_signal(e["raw"]) for e in selected_episodes):
                 result["unavailable"].append({"key": key, "reason": "answer_visibility_conflict"})
                 continue
             episode_ids = {e["episode_id"] for e in episodes}
+            # Reuse the first eligible point's parse within this state-checked request.
+            if receipt is None and claims is None:
+                claims = _claims_by_point(_load_claims(state))
             point = {"key": key, "summary_sha256": row["summary_sha256"], "retrieval_method": method,
                      "visibility": "protected" if protected else "answer_free", "audit": audit,
-                     "claims": _claims(state, key, episode_ids, lifecycle, cutoff, not protected),
+                     "claims": [] if claims is None else _claims(claims.get(key, {}), key, episode_ids, lifecycle, cutoff, not protected),
                      "episodes_total": len(all_rows), "episodes_in_scope": len(episodes)}
             active_count = sum(item["episode_id"] not in invalid_ids for item in all_rows)
             scope_filtered = filtered and not (accepted and len(episodes) == active_count)
-            summary_scope_incomplete = bool(cutoff or source_id or unit_id or scope_filtered
-                                            or (protected and len(json.loads(row["question_ids_json"])) > 1))
+            summary_scope_incomplete = bool(cutoff or source_id or unit_id or question_id or scope_filtered)
             point["summary_scope_incomplete"] = summary_scope_incomplete
-            if not summary_scope_incomplete and not cutoff:
+            if ambiguous:
+                point["observation_order"] = ambiguous_observation_order(group)
+            elif not summary_scope_incomplete and not cutoff:
                 point["teaching_hint"] = record["teaching_hint"]
                 point["teaching_hint_status"] = "legacy_unclassified"
                 if record.get("contrasts"):
@@ -554,6 +804,15 @@ def query_memory_context(repo: Path, state: Path, *, keys: list[str] | None = No
                 latest = episodes[0]
                 point["latest_observation"] = _episode_public(latest["raw"])
                 point["sources"] = latest["sources"]
+                if include_evidence and not protected and not same_article and not other_article:
+                    bundle_episodes[key] = latest["raw"]
+                if diagram and latest.get("article_label"):
+                    point["latest_observation"]["source_article"] = latest["article_label"]
+                if diagram and not protected and not question_id and audit.get("status") == "verified":
+                    # A scoped diagram may reuse only contrasts directly grounded in this selected episode.
+                    point["contrasts"] = [c for c in record.get("contrasts", [])
+                                          if set(c.get("source_episode_ids", [])) == {latest["episode_id"]}
+                                          and not contains_answer_signal(c)]
             else:
                 sources = {source["source_key"]: source for e in episodes for source in e["sources"]}
                 point["sources"] = list(sources.values())
@@ -563,7 +822,8 @@ def query_memory_context(repo: Path, state: Path, *, keys: list[str] | None = No
                                        # per observation crowds out real history.
                                        "source_ids": [sid for sid in e["source_ids"] if "/" not in sid and not sid.startswith("EN-PKG-")],
                                        "unit_ids": e["unit_ids"]} for e in episodes]
-            result["matched"].append(point)
+            scope = "other_article" if other_article else "same_article" if same_article else "exact_unit" if unit_id else "recorded_history"
+            result["matched"].append(_diagram_point(point, scope) if diagram else point)
             if len(result["matched"]) >= 8:
                 break
         result["coverage"].update({"candidate_count": len(seen), "points_in_scope": eligible,
@@ -571,10 +831,6 @@ def query_memory_context(repo: Path, state: Path, *, keys: list[str] | None = No
                                     "source_integrity_checked_at_build": manifest.get("source_audit_performed", False),
                                     "original_sources_reopened": False,
                                     "source_graph_expansion": "transitive" if view == "audit" else "direct_references; audit_view_expands_ancestors"})
-        if _state_identity(state) != initial_state_identity:
-            result["matched"] = [point for point in result["matched"] if point.get("role") == "explicit_preference"]
-            result["pending"].append({"reason": "memory_state_changed_during_query"})
-            result["coverage"]["points_returned"] = len(result["matched"])
         if result["matched"]:
             result["status"] = "partial" if any(result[k] for k in ("misses", "unavailable", "pending", "conflicts")) else "ready"
         elif result["pending"]:
@@ -587,8 +843,10 @@ def query_memory_context(repo: Path, state: Path, *, keys: list[str] | None = No
             result["status"] = "unavailable"
         else:
             result["status"] = "not_found"
-        return finish(result)
+        return finish(result, check_state=True)
     finally:
+        if live_db is not None:
+            live_db.close()
         db.close()
 
 
@@ -688,7 +946,7 @@ def _fallback_exact(state: Path, index: dict[str, Any], keys: list[str], ids: li
         if not is_answer_safe(record):
             result["unavailable"].append({"key": canonical, "reason": "protected_or_scope_unverified"})
             continue
-        if source_id or unit_id:
+        if source_id or unit_id or question_id:
             result["unavailable"].append({"key": canonical, "reason": "scope_index_unavailable"})
             continue
         invalid = set(lifecycle.get("invalidated_episode_ids", []))
@@ -700,15 +958,16 @@ def _fallback_exact(state: Path, index: dict[str, Any], keys: list[str], ids: li
         if not episodes:
             result["unavailable"].append({"key": canonical, "reason": "no_evidence_as_of"})
             continue
-        if not cutoff:
-            latest = _latest_episode(record)
-            episodes.sort(key=lambda e: (e["episode_id"] == latest["episode_id"],
-                                         observation_time(e.get("observed_at") or e.get("study_date"))), reverse=True)
-        else:
-            episodes.sort(key=lambda e: observation_time(e.get("observed_at") or e.get("study_date")), reverse=True)
+        group, episodes = select_observations(episodes, record if not cutoff else None)
+        ambiguous = len(group) > 1
+        if view == "teaching" and not cutoff and ambiguous:
+            result["unavailable"].append({"key": canonical, **ambiguous_observation_order(group)})
+            continue
         point = {"key": canonical, "summary_sha256": pointer["sha256"], "retrieval_method": "degraded_exact_summary",
                  "teaching_hint_status": "legacy_unclassified", "coverage": "source_and_scope_index_unavailable"}
-        if not cutoff:
+        if ambiguous:
+            point["observation_order"] = ambiguous_observation_order(group)
+        elif not cutoff:
             point["teaching_hint"] = record["teaching_hint"]
         if view == "teaching" and not cutoff:
             point["latest_observation"] = _episode_public(episodes[0])

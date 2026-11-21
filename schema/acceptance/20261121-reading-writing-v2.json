@@ -1,0 +1,629 @@
+{
+  "task_id": "EN-READING-WRITING-V2-20261121",
+  "completed_at_asia_shanghai": "2026-11-21T09:50:38+08:00",
+  "overall_status": "local_verified; independent_web_and_personal_trial_pending",
+  "source_baseline": {
+    "english_review_commit": "4809ca08ce97a9ed4c3e2f5f4143973439188cdd",
+    "bridge_review_commit": "809bf7351abe1282bb1187b82998f48908485d41",
+    "local_mcp_review_commit": "5da8f9af60b286fe0e6bb69dcc8f7f40da2832fa",
+    "historical_study_snapshot": "f83936226d510488469cb0c5c2b35f30b1fb5a0e"
+  },
+  "local_implementation": {
+    "english_code_commit": "3a07c7e9fe640e8a32c9d8deada313c34a83f4b9",
+    "local_changes_from_review_baseline": [
+      "Reused deployed V1 message capture, writing observations, session import, authoring decisions and sole writer.",
+      "Installed optional three-template tasks, immutable feedback and view selection, attribution, old-draft history locators and English teaching projection."
+    ],
+    "installed_skill_sha256": {
+      "kaoyan-english-intensive-reading/SKILL.md": {
+        "source": "1a05094783e8b5031be762d31a55ec482be2a46a06aa7177c160aab0ff7ff414",
+        "installed": "1a05094783e8b5031be762d31a55ec482be2a46a06aa7177c160aab0ff7ff414"
+      },
+      "kaoyan-english-intensive-reading/references/writing-daily-memory.md": {
+        "source": "69d34cf6f8e57f1636c928e0d2579576f7e1406e742130d1a5461c3bfe3b1783",
+        "installed": "69d34cf6f8e57f1636c928e0d2579576f7e1406e742130d1a5461c3bfe3b1783"
+      },
+      "kaoyan-english-intensive-reading/references/reading-writing-v2.md": {
+        "source": "86acb966b8921e2b9a707a1e793cac166a986ca321438736aac1db3b8c616c02",
+        "installed": "86acb966b8921e2b9a707a1e793cac166a986ca321438736aac1db3b8c616c02"
+      },
+      "kaoyan-english-reading-intake/SKILL.md": {
+        "source": "91c946935adc7c5d836af203b0562b4cefc22c010601388c85ae8b55e5516261",
+        "installed": "91c946935adc7c5d836af203b0562b4cefc22c010601388c85ae8b55e5516261"
+      },
+      "kaoyan-english-daily-intake-curation/SKILL.md": {
+        "source": "4c02dd691d17b4dfc54156454014ba0fd6cca9e2bf2d95df86f7eca01d6bfec4",
+        "installed": "4c02dd691d17b4dfc54156454014ba0fd6cca9e2bf2d95df86f7eca01d6bfec4"
+      }
+    },
+    "loaded_reader_sha256": "c613cc56fb1c5a77dd6974b183d1fd00891c91898457875461b9f193e31f23f6",
+    "normal_entrypoint": "installed english_skill.py -> scripts/english_writing.py {micro,memory}; reading uses intensive-reading",
+    "normal_entrypoint_verified": true,
+    "formal_writer_event_id": "EN-RECEIPT-61BFBAB59110F502",
+    "memory_generation": "e2ea2362eb019f9ded3d634cadb4f3baf57d2cbdfce84792970f55194d6b0d42",
+    "memory_index_source_version": "18c16f861aea038ba3c58707383473c7911c402e48a7231cf838bb2def97bd50",
+    "graph_manifest_sha256": "438095fc2e57fec61b3ee22b54011ac4c5bdd3257777441ebc3d11764760c89c",
+    "graph_input_hashes_match": true,
+    "pending_quick_high_watermark": {
+      "unit_pointer_count": 175,
+      "backlog_plan_status_counts": {
+        "pending": 2
+      },
+      "last_pointer_sha256": "b1d79713b49d104669e6d515e311c585204f821ec4c7a94c48a6108ecadf578e"
+    },
+    "formal_high_watermark": {
+      "sequence": 1100,
+      "learning_event_ledger_sha256": "5581642b4e6a439d2559d5fae87ea684e7b501c66e1f53c5cf8cb5b5f0c123a7"
+    },
+    "bridge_local_commit": "d0e69c0de64fe705139487b0ab9c06846b15c58b",
+    "english_live_private_head": "9bbb7c1cf84fbe769cdaa5f38085068fe4b86414",
+    "english_live_branch": "master",
+    "private_code_worktree_commit_matches_deployed_changed_files": true,
+    "original_writer_action_count": 51,
+    "this_upgrade_formal_apply_invocation_count": 0,
+    "this_upgrade_formal_or_learner_writes": 0,
+    "material_reconciliation": {
+      "status": "verified_existing",
+      "sources": 8,
+      "pages": 297,
+      "missing_declared": 3,
+      "repeat_ocr": 0
+    },
+    "service_release": "english-article/1.8.2",
+    "public_review_baseline_is_not_installed_private_head": true
+  },
+  "local_stdio_mcp": {
+    "change_status": "not_changed",
+    "reason_if_not_changed": "Tutoring uses the installed English CLI. Verified the sealed read-only authority service independently.",
+    "code_commit": null,
+    "release_id": "c6a6244bf56f65f7ed26004986d6e3b1a68b9f104f44e5a7288b5ed38ba07579",
+    "release_manifest_sha256": "e2e3a093d4acf55808bd964596919eaf35e4ee8878cd6d74af24df580baa97bb",
+    "loaded_server_release": "0.4.1+sha256.c6a6244bf56f65f7ed26004986d6e3b1a68b9f104f44e5a7288b5ed38ba07579",
+    "loaded_entrypoint_evidence": {
+      "sealed_launcher_sha256": "f11e4dd7763644631c061ddc329786ae7ee531c25225f064a126470fce0b9807",
+      "tools": [
+        "authority_bundle",
+        "cs408_read_bundle",
+        "english_read_bundle",
+        "math_read_bundle",
+        "verify_evidence_batch"
+      ]
+    },
+    "authority_fingerprint": "3f3179d6a22f7f3d68956abd437b04c2bcbc4b7bab917cb525f9ab2285e37dd0",
+    "new_domain_counts": {},
+    "new_session_read_status": "authority_bundle returned bound English identity"
+  },
+  "study_library": {
+    "source_role": "local_immutable_study_snapshot",
+    "publication_target": "local",
+    "source_commit": "a2b4727a865a787eed3eb16c4977df7c918c372e",
+    "local_version": "62fde671c6d134db5cf89743869f5574734e4af12a5a1f659b20eca5b6b55b34",
+    "publication_event_id": "EN-RECEIPT-61BFBAB59110F502:closeout:7eb751d31ef3f0418b98cbd9:memory:f7c1dddd8d9ec65e4c8ccfd0",
+    "formal_freshness": "current",
+    "personal_summary_status": "available",
+    "personal_summary_source_version": "f068644576b6b5d11599211352ca639565a5a5f59f3391b2ec70c215dea7f130",
+    "personal_summary_published_version": "f068644576b6b5d11599211352ca639565a5a5f59f3391b2ec70c215dea7f130",
+    "personal_summary_freshness": "current",
+    "personal_summary_projection_sha256": "af4917ef6cc644cd16280fece0809c38b21336d31cf9db93f6f6f36ec4a202b1",
+    "coverage_status": "COMPLETE",
+    "included_domains_and_counts": {
+      "vocabulary": {
+        "records": 2612,
+        "null_ids": 0
+      },
+      "sentence_patterns": {
+        "records": 110,
+        "null_ids": 0
+      },
+      "articles": {
+        "records": 61,
+        "null_ids": 0
+      },
+      "intake_events": {
+        "records": 9,
+        "null_ids": 0
+      },
+      "other_history_files": {
+        "records": 1358,
+        "null_ids": 1358
+      },
+      "teaching": {
+        "generation": "e2ea2362eb019f9ded3d634cadb4f3baf57d2cbdfce84792970f55194d6b0d42",
+        "included_points": 2068,
+        "state": "available",
+        "total_local_points": 2879,
+        "excluded_points": 811,
+        "excluded": [
+          "protected",
+          "pending_or_invalidated",
+          "older_episodes",
+          "raw_evidence",
+          "quick_only"
+        ]
+      },
+      "files": {
+        "files": 16712,
+        "bytes": 2024052188,
+        "current_files": 10273,
+        "retained_files": 6439,
+        "lfs_files": 1
+      }
+    },
+    "excluded_domains_and_reasons": {
+      "older_and_protected": "Only the latest active eligible answer-free observation per point",
+      "private_writing_originals": "local Capture and original archive only",
+      "current_shards": "fixed path index and 17 shards",
+      "raw_personal_summary": "not part of the public teaching projection"
+    },
+    "quick_vs_formal_scope": "Quick Capture and UI actions do not produce formal observations. Fixed teaching projection derives from confirmed native records.",
+    "sample_ids_paths_hashes": [
+      {
+        "path": "context/personal-summary/current.json",
+        "sha256": "af4917ef6cc644cd16280fece0809c38b21336d31cf9db93f6f6f36ec4a202b1",
+        "eof": true
+      },
+      {
+        "path": "context/personal-summary/writing.json",
+        "sha256": "5522d7aa58b66e990559eaca1bf9726b4a467cd426217b2680f2a35a38964f5a",
+        "eof": true
+      }
+    ],
+    "protection_probe_results": [
+      "PROTECTED_PUBLISHED_SOURCE",
+      "before_attempt returned normally",
+      "old snapshot historical"
+    ],
+    "local_readback_status": "pass",
+    "chatgpt_independent_readback_status": "pending",
+    "formal_version": "d4492a561d4e651aabf691386e41fe00106419196cb779f77242ea91c7ff955d",
+    "memory_generation": "e2ea2362eb019f9ded3d634cadb4f3baf57d2cbdfce84792970f55194d6b0d42",
+    "index_source_sha256": "18c16f861aea038ba3c58707383473c7911c402e48a7231cf838bb2def97bd50"
+  },
+  "github": [
+    {
+      "repository": "xialovezhu-wq/kaoyan-english-system",
+      "remote_ref": "refs/heads/review/20261121-english-reading-writing-v2",
+      "remote_commit_sha": null,
+      "review_doc_path": "schema/acceptance/20261121-reading-writing-v2.json",
+      "code_and_snapshot_mapping": {
+        "snapshot": "a2b4727a865a787eed3eb16c4977df7c918c372e",
+        "private_code_commit": "3a07c7e9fe640e8a32c9d8deada313c34a83f4b9"
+      },
+      "private_data_scan_status": "see independent pre-push all-reachable full-tree scan in terminal receipt",
+      "push_status": "pre_push"
+    },
+    {
+      "repository": "xialovezhu-wq/study-pro-bridge",
+      "remote_ref": "refs/heads/review/20261121-english-reading-writing-v2",
+      "remote_commit_sha": null,
+      "review_doc_path": "schema/acceptance/20261121-reading-writing-v2.json",
+      "code_and_snapshot_mapping": {
+        "snapshot": "a2b4727a865a787eed3eb16c4977df7c918c372e",
+        "private_code_commit": "d0e69c0de64fe705139487b0ab9c06846b15c58b"
+      },
+      "private_data_scan_status": "see independent pre-push all-reachable full-tree scan in terminal receipt",
+      "push_status": "pre_push"
+    }
+  ],
+  "acceptance": {
+    "A01_to_A22_results": [
+      {
+        "id": "A01",
+        "status": "pass",
+        "evidence": "已安装精读 Skill wrapper 解析实际英语根并调用 native memory/open_assessment；正常 start-today 合成回归通过。"
+      },
+      {
+        "id": "A02",
+        "status": "pass",
+        "evidence": "同一完整课重交复用原包；既有 writer 回执重试与新进程摘要验回通过。"
+      },
+      {
+        "id": "A03",
+        "status": "pass",
+        "evidence": "同消息文本或附件改变产生新原件版本；旧字节、定位和哈希可读。"
+      },
+      {
+        "id": "A04",
+        "status": "pass",
+        "evidence": "不同 session/attempt 的相同文本保持原生身份；英语事件键包含宿主、会话、消息和知识点。"
+      },
+      {
+        "id": "A05",
+        "status": "pass",
+        "evidence": "同源的阶段快存和课后整场重交沿相同原消息复用，不新增作答次数。"
+      },
+      {
+        "id": "A06",
+        "status": "pass",
+        "evidence": "原生分享、私有链接和附件仅按实际可取范围收件；未取全保留缺项。"
+      },
+      {
+        "id": "A07",
+        "status": "pass",
+        "evidence": "自改、仅确认、示例曝光和采纳单列；接受建议只生成有来源的新版本。"
+      },
+      {
+        "id": "A08",
+        "status": "pass",
+        "evidence": "隔离开放题绑定已登记机会、首稿、曝光及语义评价；已达成只增加一次观察。"
+      },
+      {
+        "id": "A09",
+        "status": "pass",
+        "evidence": "重复句必须提供精确码点偏移；旧版删拆、改序与跨段变更拒绝错误挂接。含 emoji、中文和组合字符。"
+      },
+      {
+        "id": "A10",
+        "status": "pass",
+        "evidence": "重复采纳请求复用原决定，旧 revision/base 明确冲突，首稿哈希保留。"
+      },
+      {
+        "id": "A11",
+        "status": "pass",
+        "evidence": "真实 HTTP 资料页配合 DOM 客户端验证定位、按需展开、自改与关闭重开；Redmi 的只读原稿另有实机回执。"
+      },
+      {
+        "id": "A12",
+        "status": "pass",
+        "evidence": "正式 writer 收尾后，新进程从正常写作记忆入口读取任务线索、提示和修订来源。"
+      },
+      {
+        "id": "A13",
+        "status": "pass",
+        "evidence": "低预算保留完整观察和遗漏计数，固定旧首稿可由精确 episode ID 续取。"
+      },
+      {
+        "id": "A14",
+        "status": "pass",
+        "evidence": "原 builder 首次发现三个过期输入，重建派生关系后 --verify-only 通过，正式哈希前后一致。"
+      },
+      {
+        "id": "A15",
+        "status": "pass",
+        "evidence": "固定合成正式版，仅改变本机摘要身份可得 stale；当前身份未知或 pending 均不会判为 current。"
+      },
+      {
+        "id": "A16",
+        "status": "pass",
+        "evidence": "既有正式回执派生发布重试与不可变候选恢复通过，生产 formal apply 调用数为零。"
+      },
+      {
+        "id": "A17",
+        "status": "pending",
+        "evidence": "本地真实 Study Library 已固定新快照，摘要索引及作文分片读到 EOF 并比对哈希。ChatGPT 网页独立读回待办。"
+      },
+      {
+        "id": "A18",
+        "status": "pass",
+        "evidence": "真实整库 fetch 拒绝；文章绑定和兄弟题不串的保护回归通过，答前查询成功。"
+      },
+      {
+        "id": "A19",
+        "status": "pass",
+        "evidence": "合成私稿和原件路径未出现在安全投影。公开提交的祖先、各完整树、凭据、个人标识及原文匹配另有扫描回执。"
+      },
+      {
+        "id": "A20",
+        "status": "pending",
+        "evidence": "发布后从远端读取分支头、关键代码和脱敏回执并比对 Git blob。"
+      },
+      {
+        "id": "A21",
+        "status": "pass",
+        "evidence": "四个独立作答的固定首稿：原件、精确身份、前五条召回和预算遗漏分层。加入 64 份隔离合成竞争项后复测同一批。"
+      },
+      {
+        "id": "A22",
+        "status": "pass",
+        "evidence": "共享层原有数学和 408 读取与保护测试通过；两科生产只读请求均成功，使用各科已有快照。"
+      }
+    ],
+    "fixed_cohort_id": "writing-first-submissions-20261121",
+    "exact_lookup_passed_total": [
+      4,
+      4
+    ],
+    "source_hash_passed_total": [
+      4,
+      4
+    ],
+    "natural_recall_at_k_passed_total": [
+      4,
+      4
+    ],
+    "context_inclusion_or_explained_omission_total": [
+      4,
+      4
+    ],
+    "engineering_status": "native pipeline, data and local MCP verified; physical portrait layout pending",
+    "user_interaction_status": "pending_real_learner",
+    "longitudinal_real_retention_status": "pending",
+    "independent_writing_transfer_status": "pending",
+    "latency_measurements": [
+      {
+        "before": {
+          "median_seconds": 0.09085858298931271,
+          "returned_bytes": [
+            4471,
+            4471,
+            4471,
+            4471,
+            4471
+          ],
+          "samples_seconds": [
+            0.1801574999699369,
+            0.09085858298931271,
+            0.08916479209437966,
+            0.09248633298557252,
+            0.09043387498240918
+          ],
+          "all_hit": true,
+          "max_bytes": 6144
+        },
+        "after": {
+          "median_seconds": 0.08960287494119257,
+          "returned_bytes": [
+            5476,
+            5476,
+            5476,
+            5476,
+            5476
+          ],
+          "samples_seconds": [
+            0.09158737503457814,
+            0.08960287494119257,
+            0.08867791702505201,
+            0.09027029201388359,
+            0.0871781250461936
+          ],
+          "all_hit": true,
+          "max_bytes": 6144
+        }
+      },
+      {
+        "script_seconds": 0.09462162491399795,
+        "synthetic": true,
+        "user_to_reply_seconds": null,
+        "packages": 1
+      }
+    ],
+    "added_model_calls_and_cost": {
+      "additional_background_model_calls": 0,
+      "added_paid_service_cost": 0,
+      "note": "No secondary grader; measurements exclude the Codex implementation conversation."
+    },
+    "B01_to_B14_results": [
+      {
+        "id": "B01",
+        "status": "pass",
+        "evidence": "保留原意的条件从句或换序分句均可达标。各模板有两种合格方向及反例，评价逐项绑定原稿跨度。"
+      },
+      {
+        "id": "B02",
+        "status": "pass",
+        "evidence": "取消原材料的人手限定时，即使句法通顺也判关系目标未达成。"
+      },
+      {
+        "id": "B03",
+        "status": "pass",
+        "evidence": "由两位来访者推断所有人成绩提高，归因和支持均不成立；应用文可给切题行动建议。"
+      },
+      {
+        "id": "B04",
+        "status": "pass",
+        "evidence": "局部目标和语言发现分别保存。中心意思受阻时待核；只换形容词无法结清原来的行动目标。"
+      },
+      {
+        "id": "B05",
+        "status": "pass",
+        "evidence": "指定 although 归为形式提示，只要求表达让步归为功能提示；无定向线索与未知分开。"
+      },
+      {
+        "id": "B06",
+        "status": "pass",
+        "evidence": "题面、相邻说明、侧栏和实际曝光均归因；关闭范例不能清除记录，重输示范为混合来源。"
+      },
+      {
+        "id": "B07",
+        "status": "pass",
+        "evidence": "重编号旧稿归入同题，既有场景再次使用单列；无合理机会保留原因。"
+      },
+      {
+        "id": "B08",
+        "status": "pass",
+        "evidence": "生产旧作文分片实际读回，三项旧写作点的 V2 条件保留 unknown。隔离新观察则贯通原值。"
+      },
+      {
+        "id": "B09",
+        "status": "pass",
+        "evidence": "阅读未完成不出题，训练可跳过，原精读 Skill 保有直接讲解及 0–1 个必要问题合同。"
+      },
+      {
+        "id": "B10",
+        "status": "pass",
+        "evidence": "回跳核文章、句号、题号、源码点/文本哈希和当下授权。原图谱验证失败时停止使用派生依据。"
+      },
+      {
+        "id": "B11",
+        "status": "pass",
+        "evidence": "阅读、求助、确认、显示动作和一次迁移均不自动写入永久掌握；合成库与生产正式哈希独立核对。"
+      },
+      {
+        "id": "B12",
+        "status": "pass",
+        "evidence": "正常 CLI 接合成课，课后 receive --commit 经过原 writer、归档和新进程；本轮新字段在独立不可变测试快照经真实 stdio MCP 读回。"
+      },
+      {
+        "id": "B13",
+        "status": "pass",
+        "evidence": "预登记 4 个合格机会，2 达到、1 未达到、1 结果未知，比例 2/4；修正机会有理由、前后分母。资格未知另列。"
+      },
+      {
+        "id": "B14",
+        "status": "pass",
+        "evidence": "未提交即求助只留下草稿；开放复测原始载荷无定向目标、示范或自动记忆标签。"
+      }
+    ],
+    "per_case_status_allowed": [
+      "pass",
+      "fail",
+      "pending",
+      "not_applicable"
+    ],
+    "fixed_cohort": {
+      "fixed_count": 4,
+      "k": 5,
+      "query_budget_bytes": 6144,
+      "frozen_cohort_sha256": "f08e232ff883d30db44095270d78794b57b1f89b1fb2338219a0f221595eb665",
+      "before_natural": 0,
+      "after_natural": 4,
+      "growth_natural": 4,
+      "growth_exact": 4,
+      "growth_originals": 4,
+      "synthetic_competitors": 64,
+      "growth_snapshot": "0130009a93f6c80c713bb5e1d2537de4d24045ad4244e074f7ec5aa9a45bdf0f",
+      "ranks": [
+        3,
+        2,
+        1,
+        1
+      ],
+      "prior_miss_layers": "3 queries missed the point in returned candidates, 1 returned the point with newer observations. Verified by fixed event IDs."
+    },
+    "dom_client": {
+      "engine": "jsdom DOM with actual English HTTP service",
+      "submitted": true,
+      "anchor_focus": true,
+      "matching_readonly_mirror": true,
+      "example_hidden_until_click": true,
+      "revision_saved": true,
+      "reopened": true,
+      "errors": []
+    },
+    "redmi_mirror": {
+      "checks": {
+        "saved": "pass",
+        "served": "pass",
+        "rendered": "pass",
+        "placed": "pass"
+      },
+      "observed_revision": 6,
+      "viewport": [
+        1864,
+        1080
+      ]
+    },
+    "isolated_mcp": {
+      "source_commit": "e6c978d1643aba6def8cfd272bdcbdb28c8d9604",
+      "writing_projection_sha256": "7330481100c4c2cdf2ecba7e0b0114225f15aeb7c83ca18688b60f993066d724",
+      "eof": true
+    },
+    "live_other_subject_probes": [
+      {
+        "subject": "math",
+        "ok": true,
+        "source_commit": "7063d6b0c10c62eed9cfce0d2b14cafab29ed032",
+        "freshness": "stale",
+        "coverage": "PARTIAL",
+        "read_only": 0
+      },
+      {
+        "subject": "408",
+        "ok": true,
+        "source_commit": "e4ca1f259604faa8194b173f9a8615d9aa90b79b",
+        "freshness": "stale",
+        "coverage": "PARTIAL",
+        "read_only": 0
+      },
+      {
+        "subject": "english",
+        "ok": true,
+        "source_commit": "f83936226d510488469cb0c5c2b35f30b1fb5a0e",
+        "freshness": "historical",
+        "personal": "historical",
+        "coverage": "COMPLETE",
+        "read_only": 0
+      }
+    ]
+  },
+  "rollback": {
+    "previous_code_or_release": {
+      "english_preimage": "77aa9e83f06d7e7c2ee05778a1f40b51ebd8f674",
+      "bridge_preimage": "507bd9776563ecde9456d76a30714145e7880cad",
+      "english_reader": "english-article/1.7"
+    },
+    "previous_memory_generation": "e2ea2362eb019f9ded3d634cadb4f3baf57d2cbdfce84792970f55194d6b0d42",
+    "previous_study_snapshot": "f83936226d510488469cb0c5c2b35f30b1fb5a0e",
+    "feature_switch": "KAOYAN_ENGLISH_MICRO_WRITING=off inhibits new optional tasks. Restore verified code/Skill preimages selectively; preserve original drafts and formal events.",
+    "publication": "Use the prior source_commit as an explicitly historical read. Rebuild only the missing derivative with its original writer receipt. Compare current source identity before any generation switch.",
+    "github": "Revert the specific public review commit with a new commit; no force push."
+  },
+  "blocked_or_unverified": [
+    "Live portrait placement was refused because a different writing session holds the existing layout. No lease takeover. Actual Redmi mirror, HTTP and DOM behavior have separate receipts.",
+    "ChatGPT web independent readback, learner acceptance, request-to-reply capture timing, multiweek retention and real transfer are pending.",
+    "Reference corpus edition contains eight locally verified files and 297 pages. Three previously declared missing items remain outside this source edition."
+  ],
+  "plan_version": "2.0",
+  "teaching_implementation": {
+    "task_contract_version": "reading-writing/2",
+    "template_types_implemented": [
+      "relation",
+      "evidence",
+      "genre"
+    ],
+    "source_and_installed_skill_hashes": {
+      "kaoyan-english-intensive-reading/SKILL.md": {
+        "source": "1a05094783e8b5031be762d31a55ec482be2a46a06aa7177c160aab0ff7ff414",
+        "installed": "1a05094783e8b5031be762d31a55ec482be2a46a06aa7177c160aab0ff7ff414"
+      },
+      "kaoyan-english-intensive-reading/references/writing-daily-memory.md": {
+        "source": "69d34cf6f8e57f1636c928e0d2579576f7e1406e742130d1a5461c3bfe3b1783",
+        "installed": "69d34cf6f8e57f1636c928e0d2579576f7e1406e742130d1a5461c3bfe3b1783"
+      },
+      "kaoyan-english-intensive-reading/references/reading-writing-v2.md": {
+        "source": "86acb966b8921e2b9a707a1e793cac166a986ca321438736aac1db3b8c616c02",
+        "installed": "86acb966b8921e2b9a707a1e793cac166a986ca321438736aac1db3b8c616c02"
+      },
+      "kaoyan-english-reading-intake/SKILL.md": {
+        "source": "91c946935adc7c5d836af203b0562b4cefc22c010601388c85ae8b55e5516261",
+        "installed": "91c946935adc7c5d836af203b0562b4cefc22c010601388c85ae8b55e5516261"
+      },
+      "kaoyan-english-daily-intake-curation/SKILL.md": {
+        "source": "4c02dd691d17b4dfc54156454014ba0fd6cca9e2bf2d95df86f7eca01d6bfec4",
+        "installed": "4c02dd691d17b4dfc54156454014ba0fd6cca9e2bf2d95df86f7eca01d6bfec4"
+      }
+    },
+    "normal_reading_entrypoint": "kaoyan-english-intensive-reading",
+    "normal_writing_entrypoint": "scripts/english_writing.py",
+    "selected_provider_and_model_unchanged": true,
+    "single_target_and_hidden_example_verified": true,
+    "task_cue_and_answer_support_verified": true,
+    "open_transfer_rule_verified": true,
+    "source_return_and_authorization_verified": true,
+    "old_reference_grounded_example_contract_preserved": true,
+    "synthetic_test_root_isolated": true,
+    "real_learning_trial_status": "pending",
+    "real_trial_count": 0,
+    "extra_minutes_per_session": [],
+    "learning_metrics": {
+      "independent_attempts": 0,
+      "assisted_successes": 0,
+      "open_transfer_successes": 0,
+      "eligible_open_transfer_opportunities": 0,
+      "not_applicable_count": 0,
+      "unknown_count": 0,
+      "actual_delays_days": [],
+      "rubric_and_task_comparability_note": "New V2 real-user trials only. Legacy observations have unknown provenance axes; synthetic 2/4 is an engineering check.",
+      "assessment_tasks_offered": 0,
+      "skipped_or_switched_to_training": 0,
+      "eligible_target_met": 0,
+      "eligible_target_not_met": 0,
+      "eligible_target_unknown": 0,
+      "denominator_preregistered_rule_version": "open-opportunity/1",
+      "denominator_corrections": [],
+      "observed_success_over_all_eligible": null,
+      "eligibility_pending_count": 0,
+      "eligibility_pending_reasons": []
+    }
+  }
+}

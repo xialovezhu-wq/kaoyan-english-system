@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 from pathlib import Path
 from typing import Any
 
@@ -24,10 +25,19 @@ def add_memory_commands(subparsers: Any, *, parents: list[argparse.ArgumentParse
     query.add_argument("--unit-id")
     query.add_argument("--view", choices=("teaching", "history", "audit"), default="teaching")
     query.add_argument("--as-of", help="Occurred-date cutoff, interpreted using currently accepted evidence.")
+    query.add_argument("--known-publication", help="Pin an exact ready English publication for a history/audit replay with --as-of.")
     query.add_argument("--max-bytes", type=int)
+    query.add_argument("--include-evidence", action="store_true",
+                       help="Resolve the selected exact-unit episode's original messages within the response budget.")
     query.add_argument("--question-id")
     query.add_argument("--unlocked-question-id", action="append", default=[])
-    query.add_argument("--backend", choices=("auto", "native"), default="auto")
+    query.add_argument("--backend", choices=("auto", "native", "basic-memory", "qmd"), default="auto")
+    query.add_argument("--prepare-diagram", type=Path, metavar="FILE.context.json")
+    query.add_argument("--focus-key", help="Place the current diagram's main observation before supporting keys.")
+    query.add_argument("--diagram-text", help="Current sentence text when an indexed reading unit is unavailable.")
+    query.add_argument("--diagram-vocab", action="append", default=[], metavar="ITEM|SOURCE_FORM[|MODE]")
+    query.add_argument("--diagram-brief", action="store_true",
+                       help="Keep the full verified context on disk and return a compact sense list to the teaching turn.")
 
     build = subparsers.add_parser("build-memory-index", parents=parents,
         help="Audit and incrementally rebuild derived memory; never writes formal learning facts.")
@@ -47,6 +57,17 @@ def add_memory_commands(subparsers: Any, *, parents: list[argparse.ArgumentParse
     recover.add_argument("--writer-receipt", type=Path)
 
 
+def _selected_backend(state: Path) -> str:
+    path = state / "memory" / "backend-selection.json"
+    if not path.is_file():
+        return "native"
+    row = load_json(path)
+    backend = row.get("backend", "native")
+    if backend not in {"native", "basic-memory", "qmd"}:
+        raise ValidationError("invalid memory backend selection")
+    return backend
+
+
 def _budget(result: dict[str, Any], maximum: int) -> dict[str, Any]:
     if len(canonical_bytes(result)) <= maximum:
         return result
@@ -55,9 +76,62 @@ def _budget(result: dict[str, Any], maximum: int) -> dict[str, Any]:
     result.pop("backend", None)
     if len(canonical_bytes(result)) <= maximum:
         return result
+    ambiguous = result.get("coverage", {}).get("observation_order_ambiguous_count")
     return {"schema_version": "english_memory_context_v1", "status": "partial",
-            "matched": [], "coverage": {"complete": False, "reason": "response_budget"},
+            "matched": [], "coverage": {"complete": False, "reason": "response_budget",
+                                        **({"observation_order_ambiguous_count": ambiguous} if ambiguous else {})},
             "formal_write_count": 0}
+
+
+def _external_mirror(state: Path, current: dict[str, Any]) -> Path | None:
+    """Only a lifecycle-filtered, current mirror may reach a local embedder."""
+    from .memory_store import lifecycle_fingerprint, read_lifecycle
+    pointer_path = state / "memory/backend-mirror.json"
+    if not pointer_path.is_file():
+        return None
+    pointer = load_json(pointer_path)
+    summary = state / "personal-summary/current.json"
+    claims = state / "memory/claims.json"
+    if (pointer.get("generation") != current.get("generation")
+            or not summary.is_file()
+            or pointer.get("summary_index_sha256") != file_sha256(summary)
+            or pointer.get("lifecycle_sha256") != lifecycle_fingerprint(read_lifecycle(state))
+            or pointer.get("claims_sha256") != (file_sha256(claims) if claims.is_file() else None)):
+        return None
+    path = Path(str(pointer.get("mirror_path", ""))).resolve()
+    try:
+        path.relative_to((state / "memory/exports").resolve())
+    except ValueError:
+        return None
+    return path if path.is_dir() else None
+
+
+def _brief_diagram_result(result: dict[str, Any]) -> dict[str, Any]:
+    """Reduce dictionary transport only. The native memory receipt and render context stay intact."""
+    references = []
+    for target in result["vocabulary"]:
+        ref = target["reference"]
+        if ref.get("status") != "ready":
+            references.append(target)
+            continue
+        compact = {name: ref[name] for name in (
+            "status", "item", "translations", "english_definitions", "dictionary_status",
+            "dictionary_reference_form", "dictionary_source", "ambiguous_forms",
+            "count_mode", "counts", "source_form_counts", "coverage", "counting_note",
+            "corpus_version", "match_type", "scope",
+        ) if name in ref}
+        senses = []
+        for sense in ref.get("senses", []):
+            examples = sense.get("examples") or []
+            # Prefer a clause-sized candidate. Semantic suitability is checked by the teacher.
+            candidate = next((ex for ex in examples if isinstance(ex, str) and len(ex.split()) >= 4), None)
+            if candidate is None and examples:
+                candidate = examples[0]
+            senses.append([sense.get("id"), sense.get("pos"), sense.get("definition"), candidate])
+        compact["sense_rows"] = senses
+        references.append({"target": target["target"], "reference": compact})
+    return {**result, "vocabulary": references, "sense_fields": ["id", "pos", "definition", "example_candidate"],
+            "dictionary_view": "all_senses_one_candidate_each", "complete_dictionary_in_context": True}
 
 
 def run_memory_command(args: argparse.Namespace) -> dict[str, Any]:
@@ -67,11 +141,57 @@ def run_memory_command(args: argparse.Namespace) -> dict[str, Any]:
         maximum = args.max_bytes if args.max_bytes is not None else (6144 if args.view == "teaching" else 16384)
         if not 512 <= maximum <= 16384:
             raise ValidationError("memory query budget must be between 512 and 16384 bytes")
-        diagnostic = {"name": "native", "api_requests": 0}
+        diagram_path = getattr(args, "prepare_diagram", None)
+        diagram_terms = getattr(args, "diagram_vocab", [])
+        focus = getattr(args, "focus_key", None)
+        diagram_text = getattr(args, "diagram_text", None)
+        if diagram_path is not None:
+            if (args.view != "teaching" or args.as_of or args.question_id or args.unlocked_question_id
+                    or getattr(args, "known_publication", None) or args.backend not in {"auto", "native"}):
+                raise ValidationError("prepared diagrams use current answer-free native teaching")
+            from .diagram_context import prepare_diagram_context
+
+            vocabulary = []
+            for term in diagram_terms:
+                parts = [part.strip() for part in term.split("|")]
+                if len(parts) not in {2, 3} or not all(parts):
+                    raise ValidationError("diagram vocabulary requires ITEM|SOURCE_FORM[|MODE]")
+                vocabulary.append(dict(zip(("item", "source_form", "frequency_mode"), parts)))
+            result = prepare_diagram_context(repo, state, diagram_path, source_id=args.source_id, unit_id=args.unit_id,
+                text=diagram_text, keys=args.key, ids=args.id, query=args.query, focus_key=focus,
+                vocabulary=vocabulary, max_bytes=maximum, include_evidence=getattr(args, "include_evidence", False))
+            return _brief_diagram_result(result) if getattr(args, "diagram_brief", False) else result
+        if diagram_terms or focus or diagram_text is not None or getattr(args, "diagram_brief", False):
+            raise ValidationError("diagram-specific input requires --prepare-diagram")
+        backend = _selected_backend(state) if args.backend == "auto" else args.backend
+        candidates = None
+        diagnostic: dict[str, Any] = {"name": "native", "api_requests": 0}
+        # An explicit identity never broadens to a natural-language search.
+        known_publication = getattr(args, "known_publication", None)
+        if args.query and not (args.key or args.id) and not known_publication and backend != "native":
+            from .memory_backends import search_candidates
+            current_path = state / "memory" / "current.json"
+            current = load_json(current_path) if current_path.is_file() else {}
+            generation = current.get("generation", "")
+            if generation and not re.fullmatch(r"[a-f0-9]{64}", str(generation)):
+                raise ValidationError("invalid memory projection generation")
+            mirror = _external_mirror(state, current)
+            try:
+                filters = {name: value for name, value in
+                           (("source_id", args.source_id), ("unit_id", args.unit_id), ("as_of", args.as_of)) if value}
+                candidate_result = (search_candidates(backend, args.query, mirror, timeout=2.0, limit=8, filters=filters)
+                    if mirror is not None else {"status": "degraded", "degraded": "current_safe_mirror_unavailable", "candidate_keys": []})
+                candidates = candidate_result.get("candidate_keys", [])
+                diagnostic = {"name": backend, "status": candidate_result.get("status"),
+                              "degraded": candidate_result.get("degraded"),
+                              "elapsed_ms": candidate_result.get("elapsed_ms"), "api_requests": 0}
+            except (OSError, ValueError, RuntimeError, PipelineError) as exc:
+                diagnostic = {"name": backend, "status": "degraded", "degraded": type(exc).__name__, "api_requests": 0}
         result = query_memory_context(repo, state, keys=args.key, ids=args.id, query=args.query,
             source_id=args.source_id, unit_id=args.unit_id, view=args.view, as_of=args.as_of,
             max_bytes=max(512, maximum - 384), question_id=args.question_id,
-            unlocked_question_ids=args.unlocked_question_id)
+            unlocked_question_ids=args.unlocked_question_id, candidate_keys=candidates,
+            known_publication=known_publication, include_evidence=getattr(args, "include_evidence", False))
         result["backend"] = diagnostic
         return _budget(result, maximum)
 
@@ -106,7 +226,7 @@ def run_memory_command(args: argparse.Namespace) -> dict[str, Any]:
         current = state / "memory" / "current.json"
         return {"schema_version": "english_memory_status_v1", "closeout": memory_closeout_status(state),
                 "current": load_json(current) if current.is_file() else None,
-                "backend": "native", "formal_write_count": 0}
+                "backend": _selected_backend(state), "formal_write_count": 0}
 
     if args.command == "recover-memory-closeout":
         from .memory_lifecycle import recover_memory_closeout

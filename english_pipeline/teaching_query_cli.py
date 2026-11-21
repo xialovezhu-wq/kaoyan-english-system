@@ -28,9 +28,22 @@ def run_summary_query(args: argparse.Namespace) -> dict[str, Any]:
     # Preserve both path normalization steps of the full CLI. No state or
     # directory is created, including when the requested index is absent.
     args.repo_root.resolve()
-    return query_personal_summary(args.state_dir.resolve(), keys=args.key,
-                                  question_review=args.question_review,
-                                  max_bytes=args.max_bytes, view=args.view)
+    result = query_personal_summary(args.state_dir.resolve(), keys=args.key,
+                                   question_review=args.question_review,
+                                   max_bytes=args.max_bytes, view=args.view)
+    # The lightweight summary has no current sentence/question identity. Never
+    # infer it from a historical observation or expand this read into the bank.
+    try:
+        from .runtime_paths import bridge_root
+        bridge = str(bridge_root())
+        if bridge not in sys.path:
+            sys.path.insert(0, bridge)
+        from study_visual_dispatch import attach_protocol
+        return attach_protocol(result, "english", current_id=None,
+                               source_version=result.get("summary_sha256") or result.get("source_version"),
+                               max_bytes=args.max_bytes)
+    except (ImportError, OSError, ValueError, TypeError, RuntimeError):
+        return result
 
 
 def main(argv: list[str] | None = None) -> int:

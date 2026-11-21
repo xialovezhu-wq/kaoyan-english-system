@@ -1,7 +1,9 @@
-"""Deterministic transport and preparation for the English web-review workflow.
+"""Native transport and preparation for the English web-review workflow.
 
 Models supply semantic decisions. This module preserves their original artifacts,
 binds them to native packages and delegates every formal write to the existing writer.
+An optional evidence pre-screen produces advisory sidecars only; it never changes
+the deterministic validation, review template, receipt identity or writer gates.
 """
 from __future__ import annotations
 
@@ -21,15 +23,18 @@ from typing import Any
 from zoneinfo import ZoneInfo
 
 from .errors import PipelineError, ValidationError, IdempotencyConflict
+from .cold_storage import cold_artifacts, cold_directory, guard_write
+from .runtime_paths import REPO_ROOT, bridge_root
 from .packages import (validate_conversation_package, processed_package_sha256s,
-                       create_conversation_package, validate_evidence_refs)
+                       create_conversation_package, validate_evidence_refs,
+                       whole_article_unit_id)
 from .util import (canonical_bytes, file_sha256, bytes_sha256, object_sha256,
                    load_json, atomic_write_json, utc_now, exclusive_lock)
 
 CONTRACT = "english-web-review-v1"
 PACKAGE_ID = re.compile(r"^EN-PKG-(\d{8})-[A-F0-9]{16}$")
 SHA = re.compile(r"^[a-f0-9]{64}$")
-BRIDGE = Path("/Users/your-user/Documents/Study-Pro-Bridge")
+BRIDGE = bridge_root()
 
 
 def day(value: str | None = None) -> str:
@@ -45,6 +50,7 @@ def immutable(path: Path, data: bytes) -> None:
         if path.is_symlink() or path.read_bytes() != data:
             raise IdempotencyConflict(f"immutable web artifact differs: {path}")
     else:
+        guard_write(path, data)
         _write_immutable(path, data)
 
 
@@ -130,11 +136,14 @@ def checked_zip(path: Path) -> tuple[dict[str, Any], dict[str, bytes]]:
     return manifest, files
 
 
+@cold_artifacts("segment_zip")
 def segment_zip(repo: Path, state: Path, package_id: str) -> dict[str, Any]:
     root = package_root(state, repo, package_id)
     m = validate_conversation_package(root)
     data = zipped(package_files(root))
     target = state / "web-review" / "segments" / m["study_date"] / (package_id + ".zip")
+    if not target.exists():
+        target = cold_directory(target.parent / package_id, "segments", package_id) / target.name
     immutable(target, data)
     with zipfile.ZipFile(target) as archive:
         if any(archive.read(k) != v for k, v in package_files(root).items()):
@@ -249,6 +258,8 @@ def _web_teaching_context(state: Path) -> dict[str, bytes]:
                     if current.get("latest_episode_id") in invalid:
                         current.pop("latest_episode_id")
                     latest = _latest_episode(current)
+                    if not latest:
+                        continue
                     # No raw refs, quotes, or previous answer trajectories go
                     # in the ZIP. The compact view is advisory, not evidence.
                     view = {"schema_version": SCHEMA, "key": key, "aliases": record["aliases"],
@@ -298,15 +309,11 @@ def web_reference_files(repo: Path, state: Path) -> dict[str, bytes]:
         "build_return.py": "scripts/build_english_web_return.py",
     }
     files = {name: (repo / path).read_bytes() for name, path in paths.items() if (repo / path).is_file()}
-    templates = Path(__file__).resolve().parents[1] / "codex-skill-sources/kaoyan-english-web-bundle/references"
-    for entry, filename in (("WEB_INSTRUCTIONS.txt", "PROJECT_INSTRUCTIONS.txt"),
-                            ("contracts/enhancement-deliverables.md", "ENHANCEMENT_DELIVERABLES.md")):
-        if entry not in files and (templates / filename).is_file():
-            files[entry] = (templates / filename).read_bytes()
     files.update(_web_teaching_context(state))
     return files
 
 
+@cold_artifacts("bundle")
 def bundle(repo: Path, state: Path, *, date: str | None = None, source_id: str | None = None,
            package_ids: list[str] | None = None, snapshot: dict[str, Any] | None = None,
            part_prompt: str | None = None, reference_files: dict[str, bytes] | None = None) -> dict[str, Any]:
@@ -368,7 +375,7 @@ def bundle(repo: Path, state: Path, *, date: str | None = None, source_id: str |
     manifest.update(bundle_id=bid, files=inventory(files), formal_write_count=0,
                     required_return_files=required_return_files)
     files["manifest.json"] = canonical_bytes(manifest)
-    target_root = state / "web-review" / "bundles" / bid
+    target_root = cold_directory(state / "web-review" / "bundles" / bid, "bundles", bid)
     target = target_root / "study.zip"
     immutable(target, zipped(files))
     checked_zip(target)
@@ -385,10 +392,11 @@ def bundle(repo: Path, state: Path, *, date: str | None = None, source_id: str |
             "article_count": len({r["source_id"] for r in rows}), "zip_path": str(target),
             "zip_sha256": file_sha256(target), "snapshot": snapshot,
             "web_project_url": "https://chatgpt.com/g/g-p-6aa5e7f0bd1c81919d6d71ed7a84150f/project",
-            "web_start_prompt": "请按本次压缩包内 WEB_INSTRUCTIONS.txt 的英语审阅规则处理，使用 Study Library 对照指定版本的正式库，填好建议后返回 advice.zip。",
+            "web_start_prompt": "按本包 WEB_INSTRUCTIONS.txt 和固定 source_commit 核对证据，按 manifest 的包范围返回 advice.zip。",
             "legacy_event_count": len(legacy), "formal_write_count": 0}
 
 
+@cold_artifacts("bundle_parts")
 def bundle_parts(repo: Path, state: Path, *, date: str | None = None, source_id: str | None = None,
                  package_ids: list[str] | None = None, snapshot: dict[str, Any] | None = None,
                  max_packages: int = 12, max_text_bytes: int = 65536,
@@ -427,7 +435,7 @@ def bundle_parts(repo: Path, state: Path, *, date: str | None = None, source_id:
     references = web_reference_files(repo, state)
     collection_id = "EN-PARTS-" + object_sha256({"rows": rows, "snapshot": snapshot, "budgets": budgets,
         "packing_date": packing_date, "reference_files": inventory(references)})[:24].upper()
-    destination = state / "web-review/collections" / collection_id
+    destination = cold_directory(state / "web-review/collections" / collection_id, "collections", collection_id)
     parts = []
     for number, group in enumerate(groups, 1):
         prompt = (f"这是英语审阅集合 {collection_id} 的第 {number}/{len(groups)} 部分。\n"
@@ -435,7 +443,7 @@ def bundle_parts(repo: Path, state: Path, *, date: str | None = None, source_id:
                   f"固定 Study Library 快照 {snapshot['source_commit']}，按本 ZIP 的 WEB_INSTRUCTIONS.txt 审阅。\n"
                   "本 ZIP 的 PART_PROMPT.txt 和 WEB_INSTRUCTIONS.txt 优先于项目来源旧版规则。本批固定版本变为历史版时，允许 allow_historical=true 读取同版，不能切换版本。\n"
                   "其他部分会在独立网页会话并行处理；每个 capture 只由所属部分负责。保留原始学习日期和证据。\n"
-                  "只按相关词条、句式、文章查询必要历史；长文分页读取所需范围。没有历史读取结果不能当作不存在旧词。\n"
+                  "按本片词条、句式和文章来源查询必要历史。未命中时标未知，继续处理有原件依据的项。\n"
                   "完整交付三项加强：advice.json 正式入库成稿、personal-summary-draft.json 按点个人摘要增量、vocab-export-draft.json 不背单词 A/B/C 导出成稿建议。\n"
                   "分别填写三个模板并覆盖本片全部 capture；读取 contracts/enhancement-deliverables.md。现有个人摘要在 context/personal-summary/，只读相关点，不重复计作新学习。\n"
                   "新增词条不分配正式 ID；对于已有词条/句式，给出当前部分证据支持的修改，不覆盖未读历史。\n"
@@ -466,6 +474,7 @@ def bundle_parts(repo: Path, state: Path, *, date: str | None = None, source_id:
     return {**result, "manifest_path": str(destination / "manifest.json")}
 
 
+@cold_artifacts("prepare_return")
 def prepare_return(repo: Path, state: Path, path: Path) -> dict[str, Any]:
     manifest, files = checked_zip(path)
     if (manifest.get("schema_version") != "english_web_return_v1"
@@ -499,14 +508,14 @@ def prepare_return(repo: Path, state: Path, path: Path) -> dict[str, Any]:
         if not isinstance(item.get("actions"), list) or not isinstance(item.get("reason"), str):
             raise ValidationError("advice actions/reason are missing")
     rid = "EN-RETURN-" + file_sha256(path)[:24].upper()
-    target = state / "web-review/returns" / rid
+    target = cold_directory(state / "web-review/returns" / rid, "returns", rid)
     immutable(target / "return.zip", path.read_bytes())
     for name, data in files.items():
         immutable(target / "original" / name, data)
     current_version = object_sha256(__import__("english_pipeline.learning_state", fromlist=["formal_versions"]).formal_versions(repo))
     template = {"schema_version": "english_local_web_review_v1", "return_id": rid,
                 "reviewed_formal_version": current_version,
-                "reviewer_model": "gpt-6-astra", "items": [
+                "reviewer_model": "unknown", "items": [
                     {**i, "local_decision": "needs_user"} for i in items]}
     template_path = target / "review.template.json"
     if not template_path.exists():
@@ -519,6 +528,18 @@ def prepare_return(repo: Path, state: Path, path: Path) -> dict[str, Any]:
               "formal_changed_since_web": current_version != original["snapshot"]["formal_version"],
               "formal_write_count": 0}
     jwrite(target / "prepared.json", {k: v for k, v in result.items() if k not in {"current_formal_version", "formal_changed_since_web"}})
+    # Only the returned envelope gets this additive advisory. The immutable
+    # prepare receipt and review template remain byte-for-byte native inputs.
+    try:
+        from .web_prescreen import prescreen_return
+        result['evidence_prescreen'] = prescreen_return(repo=repo, state=state,
+            original=original, manifest=manifest, items=items, return_id=rid,
+            return_sha256=result['return_zip_sha256'], output_dir=target / 'evidence-prescreen')
+    except Exception as exc:
+        result['evidence_prescreen'] = {'status': 'not_screened', 'advisory_only': True,
+            'not_flagged_is_not_approved': True, 'reason': 'prescreen_unavailable',
+            'error_type': type(exc).__name__, 'report_path': None,
+            'formal_write_count': 0, 'learner_evidence_write_count': 0}
     return result
 
 
@@ -528,8 +549,37 @@ def resolved_review_source(repo: Path, root: Path, resolution: dict[str, Any]) -
     from .util import sentence_sha256
     original = validate_conversation_package(root)
     identity = copy.deepcopy(original["source_identity"])
+    if (isinstance(resolution, dict)
+            and set(resolution) == {"source_id", "attachment_pointer", "reason"}):
+        if (identity.get("source_kind") != "user_provided"
+                or identity.get("source_id") or identity.get("source_hash")
+                or not str(resolution["reason"]).strip()):
+            raise ValidationError("attachment source binding requires unbound user text")
+        match = re.fullmatch(r"manifest.json#/attachments/(\d+)", str(resolution["attachment_pointer"]))
+        attachments = original.get("attachments", [])
+        if match is None or int(match[1]) >= len(attachments):
+            raise ValidationError("source binding requires an exact article attachment")
+        record = query(repo / DEFAULT_OUTPUT, source_id=resolution["source_id"], repo_root=repo)
+        attached = (root / attachments[int(match[1])]["path"]).read_text(encoding="utf-8")
+        if (record["source_id"] not in attached
+                or not record.get("paragraphs")
+                or any(p["text"] not in attached for p in record["paragraphs"])
+                or any(u["text"] not in attached for q in record.get("questions", []) for u in q["units"])):
+            raise ValidationError("article attachment does not prove the complete canonical source")
+        identity.update(source_id=record["source_id"], source_hash=record["source_hash"],
+                        source_article=record["source_article"], answer_exposure="protected")
+        identity["source_unit_correction"] = {
+            "original_package_id": original["package_id"],
+            "original_package_sha256": original["package_canonical_sha256"],
+            "original_unit_id": identity.get("sentence_id"),
+            "canonical_record_sha256": record["record_sha256"], **resolution,
+            "new_learner_observation": False,
+        }
+        return identity
+    additional = isinstance(resolution, dict) and resolution.get("additional_unit") is True
+    fields = {"unit_id", "evidence_pointer", "reason"} | ({"additional_unit"} if additional else set())
     if (identity.get("source_kind") != "article" or identity.get("answer_exposure") != "answer_free"
-            or not isinstance(resolution, dict) or set(resolution) != {"unit_id", "evidence_pointer", "reason"}
+            or not isinstance(resolution, dict) or set(resolution) != fields
             or not str(resolution.get("reason", "")).strip()):
         raise ValidationError("source resolution requires a bounded local article correction")
     match = re.fullmatch(r"conversation.json#/messages/(\d+)", str(resolution["evidence_pointer"]))
@@ -546,6 +596,8 @@ def resolved_review_source(repo: Path, root: Path, resolution: dict[str, Any]) -
     unit = units[0]
     if unit["unit_id"] == identity.get("sentence_id"):
         raise ValidationError("source resolution does not change the mistaken unit")
+    if additional and not any(m["role"] == "user" and identity["source_sentence"] in m["content"] for m in messages):
+        raise ValidationError("additional unit requires the original sentence to remain proved by a user quote")
     identity.update(unit_id=unit["unit_id"], sentence_id=unit["sentence_id"],
                     source_sentence=unit["text"], sentence_sha256=sentence_sha256(unit["text"]),
                     paragraph_id=unit["paragraph_id"],
@@ -559,12 +611,31 @@ def resolved_review_source(repo: Path, root: Path, resolution: dict[str, Any]) -
     return identity
 
 
+def _preserved_grouped_identity(identity: dict[str, Any], canonical: dict[str, Any]) -> dict[str, Any]:
+    """Fill a missing article locator only from a verified, same-source record."""
+    if (not identity.get("source_id")
+            or identity["source_id"] not in {canonical.get("source_id"), canonical.get("reference_id")}
+            or not identity.get("source_hash")
+            or canonical.get("source_hash") != identity["source_hash"]
+            or (identity.get("source_article") is not None
+                and canonical.get("source_article") != identity["source_article"])):
+        raise ValidationError("grouped source preservation differs from the original source")
+    preserved = copy.deepcopy(identity)
+    if preserved.get("source_article") is None and canonical.get("source_article") is not None:
+        preserved["source_article"] = canonical["source_article"]
+    return preserved
+
+
+@cold_artifacts("approve_return")
 def approve_return(repo: Path, state: Path, review_path: Path) -> dict[str, Any]:
     """Seal local model decisions and original returned bytes, never apply them."""
     from .learning_state import formal_versions
     review = load_json(review_path)
     if review.get("schema_version") != "english_local_web_review_v1":
         raise ValidationError("expected a local English web review decision document")
+    preserve_grouped = review.get("preserve_grouped_source_evidence", False)
+    if type(preserve_grouped) is not bool:
+        raise ValidationError("grouped source evidence preservation must be an explicit boolean")
     rid = str(review.get("return_id", ""))
     if not re.fullmatch(r"EN-RETURN-[A-F0-9]{24}", rid):
         raise ValidationError("invalid return ID")
@@ -579,7 +650,7 @@ def approve_return(repo: Path, state: Path, review_path: Path) -> dict[str, Any]
         raise ValidationError("local review must cover the input set exactly and name its actual reviewer")
     review_bytes = canonical_bytes(review)
     review_id = "EN-REVIEW-" + bytes_sha256(review_bytes)[:24].upper()
-    root = state / "web-review/reviews" / review_id
+    root = cold_directory(state / "web-review/reviews" / review_id, "reviews", review_id)
     if (root / "approval.json").exists():
         from .web_review_gate import approval
         return approval(state, review_id)
@@ -662,29 +733,97 @@ def approve_return(repo: Path, state: Path, review_path: Path) -> dict[str, Any]
         row = {"package_id": corrected["package_id"], "package_sha256": corrected["package_canonical_sha256"],
                "study_date": wanted[pid]["study_date"], "source_id": identity["source_id"],
                "original_package_id": pid, "unit_id": identity["sentence_id"]}
+        if item["source_resolution"].get("additional_unit") is True:
+            row["additional_unit"] = True
         corrections.append(row)
         bound.append(row)
+    supplement_group_size = review.get("supplement_group_size", 2)
+    if type(supplement_group_size) is not int or supplement_group_size not in {1, 2}:
+        raise ValidationError("supplement_group_size must be 1 or 2")
     for (study_date, source_id), group in sorted(groups.items()):
         # Each supplemental closure lists its bound formal actions. Bound that
         # list so the native 12-KiB protected support record stays readable.
-        for start in range(0, len(group), 2):
-            chunk = group[start:start + 2]
+        for start in range(0, len(group), supplement_group_size):
+            chunk = group[start:start + supplement_group_size]
             identity = copy.deepcopy(validate_conversation_package(Path(available[chunk[0]["package_id"]]["path"]))["source_identity"])
+            if chunk[0].get("source_resolution"):
+                identity = resolved_review_source(repo, Path(available[chunk[0]["package_id"]]["path"]),
+                                                 chunk[0]["source_resolution"])
+            supplement_bindings = []
+            for item in chunk:
+                binding = item
+                if identity.get("source_id") != wanted[item["package_id"]].get("source_id"):
+                    binding = next(c for c in corrections if c["original_package_id"] == item["package_id"])
+                supplement_bindings.append({"package_id": binding["package_id"],
+                                            "package_sha256": binding["package_sha256"]})
             identity.update(source_kind="explanation", answer_exposure="protected", review_route="web",
                             web_result={"origin": "project-E", "task_id": rid, "source_commit": manifest["source_commit"]},
-                            supplement_of=[{"package_id": i["package_id"], "package_sha256": i["package_sha256"]} for i in chunk],
+                            supplement_of=supplement_bindings,
                             artifact_capture=True)
             key = review_id + ":" + object_sha256([study_date, source_id, start])[:16]
             messages = [
                 {"role": "assistant", "content": files["advice.json"].decode("utf-8"),
                  "metadata": {"origin": "project-E", "evidence_type": "exact_downloaded_advice_artifact", "not_learner_attempt": True}},
                 {"role": "assistant", "content": review_bytes.decode("utf-8"),
-                 "metadata": {"origin": "local-GPT6", "evidence_type": "exact_local_review_artifact", "not_learner_attempt": True}},
+                 "metadata": {"origin": "local-GPT6", "evidence_type": "exact_local_review_artifact",
+                              "not_learner_attempt": True, "review_document": review}},
             ]
+            attachments = [{"path": str(imported / "return.zip"), "role": "other_attachment"}]
+            if preserve_grouped:
+                # The original Capture stays immutable. Preserve exact user nodes
+                # and a verified canonical source in this labelled supplement so
+                # grouped units can use the existing evidence validator unchanged.
+                from .reading_preparation import DEFAULT_OUTPUT, query
+                canonical = query(repo / DEFAULT_OUTPUT, source_id=source_id, repo_root=repo)
+                identity = _preserved_grouped_identity(identity, canonical)
+                canonical_path = root / "source-evidence" / (object_sha256(source_id) + ".json")
+                immutable(canonical_path, canonical_bytes(canonical))
+                attachments.append({"path": str(canonical_path), "role": "other_attachment"})
+                for item in chunk:
+                    original_root = Path(available[item["package_id"]]["path"])
+                    for index, message in enumerate(load_json(original_root / "conversation.json")["messages"]):
+                        if message["role"] != "user":
+                            continue
+                        independent_actions = [
+                            action["action_id"] for action in item["actions"]
+                            if action.get("action_type") == "learning_event_append"
+                            and action["event"]["kind"] in {"answer", "review"}
+                            and action["event"]["origin"] == "daily"
+                            and action["event"]["outcome"] == "correct"
+                            and action["event"]["hint_dependence"] == "none"
+                            and action["event"]["reasoning_status"] == "valid"
+                            and action["event"]["user_response"].strip()
+                            and action["event"]["reasoning"].strip()
+                            and action["event"]["user_response"] in message["content"]
+                            and action["event"]["reasoning"] in message["content"]
+                            and any(ref["package_id"] == item["package_id"]
+                                    and ref["pointer"] == f"conversation.json#/messages/{index}"
+                                    and ref["kind"] == "user_message"
+                                    for ref in action["evidence_refs"])
+                        ]
+                        # This is a formal-review annotation of an exact copy,
+                        # never a new tag written into the immutable quick Capture.
+                        # Scope it to the accepted action so another answer in
+                        # the same user message cannot inherit correct-use proof.
+                        reviewed_tags = ({
+                            "evidence_tags": ["independent_correct_use"],
+                            "independent_correct_use_action_ids": independent_actions,
+                            "independent_correct_use_review_id": review_id,
+                        } if independent_actions else {})
+                        messages.append({
+                            "role": "user", "content": message["content"],
+                            "created_at": message.get("created_at", captured_at),
+                            "metadata": {"origin": "original_package_preservation",
+                                         "original_package_id": item["package_id"],
+                                         "original_package_sha256": item["package_sha256"],
+                                         "original_message_pointer": f"conversation.json#/messages/{index}",
+                                         "original_message_sha256": object_sha256(message),
+                                         "not_new_learner_observation": True, **reviewed_tags},
+                        })
             request = {"idempotency_key": key, "segment_key": key, "thread_ref": "english-web-review:" + key,
                        "occurred_at": captured_at, "study_date": study_date, "source": identity,
                        "conversation": messages,
-                       "attachments": [{"path": str(imported / "return.zip"), "role": "other_attachment"}],
+                       "attachments": attachments,
                        "missing_fields": [] if "web_conversation.json" in files else ["web_full_conversation_not_supplied"]}
             path, receipt = create_conversation_package(state, request)
             m = validate_conversation_package(path)
@@ -710,12 +849,14 @@ def approve_return(repo: Path, state: Path, review_path: Path) -> dict[str, Any]
               "daily_dates": sorted({r["study_date"] for r in bound}), "formal_write_count": 0}
     jwrite(root / "approval.json", result)
     if superseded and review.get("supersedes_review_id"):
-        jwrite(state / "web-review/reviews" / superseded["review_id"] / "superseded.json",
+        previous_root = cold_directory(state / "web-review/reviews" / superseded["review_id"], "reviews", superseded["review_id"])
+        jwrite(previous_root / "superseded.json",
                {"review_id": superseded["review_id"], "replacement_review_id": review_id,
                 "reason": "Uncommitted review corrected after native validation; evidence retained in replacement archive set."})
     return result
 
 
+@cold_artifacts("prepare_day")
 def prepare_day(repo: Path, state: Path, review_id: str, date: str) -> dict[str, Any]:
     from .web_review_gate import approval
     from .nightly import freeze_nightly
@@ -727,7 +868,7 @@ def prepare_day(repo: Path, state: Path, review_id: str, date: str) -> dict[str,
         raise ValidationError("review superseded; resume " + load_json(superseded_path)["replacement_review_id"])
     approved = approval(state, review_id)
     root = state / "web-review/reviews" / review_id
-    dest = root / date
+    dest = cold_directory(root / date, "review-days", review_id + "-" + date)
     if (dest / "prepared.json").exists():
         prepared = load_json(dest / "prepared.json")
         for key in ("manifest", "actions", "support"):
@@ -769,6 +910,27 @@ def prepare_day(repo: Path, state: Path, review_id: str, date: str) -> dict[str,
             action = copy.deepcopy(supplied)
             if sref not in action["evidence_refs"]:
                 action["evidence_refs"].append(sref)
+            if review.get("preserve_grouped_source_evidence") and action.get("action_type") == "learning_event_append":
+                supplemental_root = Path(native[supplement["package_id"]]["path"])
+                supplemental_messages = load_json(supplemental_root / "conversation.json")["messages"]
+                original_user_pointers = {
+                    ref["pointer"] for ref in action["evidence_refs"]
+                    if ref["package_id"] == pid and ref["kind"] in {"user_message", "independent_correct_use"}
+                }
+                for index, message in enumerate(supplemental_messages):
+                    metadata = message.get("metadata", {})
+                    if (message["role"] == "user" and metadata.get("original_package_id") == pid
+                            and action["event"]["user_response"]
+                            and (action["event"]["user_response"] in message["content"]
+                                 or metadata.get("original_message_pointer") in original_user_pointers)):
+                        action["evidence_refs"].append({**sref, "pointer": f"conversation.json#/messages/{index}",
+                                                        "kind": ("independent_correct_use"
+                                                                 if action["action_id"] in metadata.get("independent_correct_use_action_ids", [])
+                                                                 else "user_message")})
+                for index, attachment in enumerate(validate_conversation_package(supplemental_root)["attachments"]):
+                    if attachment["mime_type"] == "application/json":
+                        action["evidence_refs"].append({**sref, "pointer": f"manifest.json#/attachments/{index}",
+                                                        "kind": "other_attachment"})
             if correction_ref:
                 action["evidence_refs"].append(correction_ref)
             aid = action["action_id"]
@@ -777,6 +939,8 @@ def prepare_day(repo: Path, state: Path, review_id: str, date: str) -> dict[str,
             actions[aid] = action
         source = validate_conversation_package(Path(native[corrected["package_id"] if corrected else pid]["path"]))["source_identity"]
         unit = next((source.get(k) for k in ("sentence_id", "question_id", "paragraph_id", "knowledge_point_id") if source.get(k)), None)
+        if unit is None:
+            unit = whole_article_unit_id(source)
         if not unit:
             raise ValidationError("web adjudication requires the original exact learning unit")
         original_first = load_json(Path(native[pid]["path"]) / "conversation.json")["messages"][0]
@@ -798,7 +962,7 @@ def prepare_day(repo: Path, state: Path, review_id: str, date: str) -> dict[str,
         support = copy.deepcopy(item["support_record"])
         if support.get("package_id") != pid or support.get("package_sha256") != item["package_sha256"]:
             raise ValidationError("local support proposal must retain original package identity")
-        if corrected:
+        if corrected and not corrected.get("additional_unit"):
             if (support["history_episodes"] or support["vocabulary_candidates"]
                     or any(support["teaching_cues"].values()) or support["paragraph_context"]["text"] is not None):
                 raise ValidationError("superseded source identity must retain only a protected locator")
@@ -851,6 +1015,7 @@ def prepare_day(repo: Path, state: Path, review_id: str, date: str) -> dict[str,
     return result
 
 
+@cold_artifacts("run_day")
 def run_day(repo: Path, state: Path, review_id: str, date: str, *, apply: bool = False,
             authorization: str | None = None, archive_contract: Any = None) -> dict[str, Any]:
     from .writer import apply_nightly, recover_nightly, OPEN_TRANSACTION_STATUSES
@@ -864,7 +1029,7 @@ def run_day(repo: Path, state: Path, review_id: str, date: str, *, apply: bool =
     date = day(date)
     with exclusive_lock(state / "locks/english-web-review.lock"):
         prepared = prepare_day(repo, state, review_id, date)
-        root = state / "web-review/reviews" / review_id / date
+        root = cold_directory(state / "web-review/reviews" / review_id / date, "review-days", review_id + "-" + date)
         mp, ap, sp = (Path(prepared[k + "_path"]) for k in ("manifest", "actions", "support"))
         m = load_json(mp)
         result = {"review_id": review_id, "study_date": date, "batch_id": m["batch_id"],
@@ -879,19 +1044,16 @@ def run_day(repo: Path, state: Path, review_id: str, date: str, *, apply: bool =
                          for p in m["package_documents"])
         if all_closed:
             if not apply:
-                return {**result, "status": "FORMAL_COMMITTED_PUBLICATION_VERIFICATION_PENDING"}
+                return {**result, "status": "FORMAL_COMMITTED_LOCAL_VERIFICATION_PENDING"}
+            quality_receipts = []
             for transaction in transactions:
                 recovered = recover_nightly(state, repo, transaction_path=transaction,
-                                            archive_contract=archive_contract, retry_publication=True)
+                                            archive_contract=archive_contract)
                 if recovered["status"] != "PASS":
-                    return {**result, "status": "FORMAL_COMMITTED_PUBLICATION_PENDING", "recovery": recovered}
-            if repo.resolve() == Path("/Users/your-user/Documents/kaoyan-english"):
-                try:
-                    result["snapshot"] = local_snapshot()
-                except (OSError, ValueError, PipelineError) as exc:
-                    return {**result, "status": "FORMAL_COMMITTED_PUBLICATION_PENDING", "error": str(exc)}
+                    return {**result, "status": "FORMAL_COMMITTED_LOCAL_VERIFICATION_PENDING", "recovery": recovered}
+                quality_receipts.extend(recovered.get("local_quality", []))
             result.update(status="COMPLETE", formal_version=object_sha256(formal_versions(repo)),
-                          support_status="PASS", archive_status="COMPLETE")
+                          support_status="PASS", archive_status="COMPLETE", local_quality=quality_receipts)
             jwrite(root / "complete.json", result)
             return result
         for transaction in transactions:
@@ -899,7 +1061,7 @@ def run_day(repo: Path, state: Path, review_id: str, date: str, *, apply: bool =
                 if not apply:
                     return {**result, "status": "RECOVERY_REQUIRED", "transaction_path": str(transaction)}
                 recovered = recover_nightly(state, repo, transaction_path=transaction,
-                                            archive_contract=archive_contract, retry_publication=True)
+                                            archive_contract=archive_contract)
                 if recovered["status"] != "PASS":
                     return {**result, "status": "RECOVERY_PENDING", "recovery": recovered}
         existing = _existing_closeout_for_batch(state, m, load_json(ap)["action_set_id"])
@@ -955,20 +1117,18 @@ def run_day(repo: Path, state: Path, review_id: str, date: str, *, apply: bool =
             return {**result, "status": "FORMAL_COMMITTED_SUPPORT_PENDING", "error": str(exc)}
         try:
             archived = archive_committed_batch(state, repo, manifest_path=mp, writer_receipt_path=writer_path,
-                                              contract=archive_contract or VolumeContract(), retry_publication=True)
+                                              contract=archive_contract or VolumeContract())
             result["archive_status"] = archived["status"]
             if archived["status"] != "COMPLETE":
                 return {**result, "status": "FORMAL_COMMITTED_ARCHIVE_PENDING", "archive": archived}
+            result["local_quality"] = archived["local_quality"]
+            if result["local_quality"]["status"] != "VERIFIED_CURRENT":
+                return {**result, "status": result["local_quality"]["status"]}
             for p in m["package_documents"]:
                 if not _trusted_consumed_pointer(state, date, p["package_id"], p["package_sha256"]):
                     raise ValidationError("native package archive/locator/cleanup proof is incomplete")
         except (OSError, ValueError, PipelineError) as exc:
             return {**result, "status": "FORMAL_COMMITTED_ARCHIVE_PENDING", "error": str(exc)}
-        if repo.resolve() == Path("/Users/your-user/Documents/kaoyan-english"):
-            try:
-                result["snapshot"] = local_snapshot()
-            except (OSError, ValueError, PipelineError) as exc:
-                return {**result, "status": "FORMAL_COMMITTED_PUBLICATION_PENDING", "error": str(exc)}
         result.update(status="COMPLETE", formal_version=object_sha256(formal_versions(repo)))
         jwrite(root / "complete.json", result)
         return result
@@ -976,7 +1136,7 @@ def run_day(repo: Path, state: Path, review_id: str, date: str, *, apply: bool =
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--repo-root", type=Path, default=Path("/Users/your-user/Documents/kaoyan-english"))
+    parser.add_argument("--repo-root", type=Path, default=REPO_ROOT)
     parser.add_argument("--state-dir", type=Path)
     sub = parser.add_subparsers(dest="command", required=True)
     b = sub.add_parser("bundle")

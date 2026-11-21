@@ -21,13 +21,13 @@ from pathlib import Path
 from typing import Any
 
 from .answer_safety import point_answer_risk
-from .errors import ValidationError
-from .personal_summary import INDEX, SCHEMA, _read_record, key_hash, normalize_key, teaching_header
+from .errors import PipelineError, ValidationError
+from .personal_summary import INDEX, SCHEMA, _read_record, key_hash, normalize_key, select_observations, teaching_header
 from .util import (atomic_write_json, atomic_write_text, canonical_bytes,
                    exclusive_lock, file_sha256, load_json, object_sha256, utc_now)
 
 PROJECTION_SCHEMA = "english_memory_projection_v1"
-RECIPE = "english-memory-evidence-v6"
+RECIPE = "english-memory-evidence-v7"
 _STOP_WORDS = {"the", "a", "an", "is", "are", "was", "were", "i", "my", "me", "of", "to", "and", "or",
                "以前", "之前", "这个", "那个", "怎样", "怎么", "哪里", "什么", "有没有", "是否", "我的", "现在"}
 
@@ -167,7 +167,7 @@ def _pointer(value: Any, pointer: str) -> Any:
     return value
 
 
-def _scope_from_document(document: Any) -> dict[str, set[str]]:
+def _scope_from_document(document: Any, article_aliases: dict[tuple[str, str], str] | None = None) -> dict[str, set[str]]:
     result = {"source_ids": set(), "unit_ids": set(), "question_ids": set(), "formal_ids": set(), "bindings": set()}
     if not isinstance(document, dict):
         return result
@@ -185,6 +185,13 @@ def _scope_from_document(document: Any) -> dict[str, set[str]]:
             if isinstance(item.get(field), str) and item[field]:
                 result[target].add(item[field])
                 {"source_ids": bound_sources, "unit_ids": bound_units, "question_ids": bound_questions}[target].add(item[field])
+        version = item.get("source_hash")
+        source_id = item.get("source_id")
+        if article_aliases and isinstance(version, str) and isinstance(source_id, str):
+            equivalent = article_aliases.get((source_id, version.removeprefix("sha256:")))
+            if equivalent:
+                bound_sources.add(equivalent)
+                result["source_ids"].add(equivalent)
         if bound_sources or bound_units or bound_questions:
             result["bindings"].add((tuple(sorted(bound_sources)), tuple(sorted(bound_units)), tuple(sorted(bound_questions))))
         for field in ("bank_ids", "formal_ids", "sentence_pattern_ids"):
@@ -210,6 +217,23 @@ class _SourceAudit:
         self.refs: dict[str, tuple[dict[str, Any], dict[str, set[str]]]] = {}
         self.archives: dict[str, Path | None] = {}
         self.parents: dict[str, dict[str, Any] | None] = {}
+        self.article_aliases: dict[tuple[str, str], str] = {}
+        self.catalog_sha256: str | None = None
+        if enabled:
+            from .sources import build_source_catalog
+            try:
+                catalog = build_source_catalog(self.repo)
+            except (OSError, ValueError, KeyError, TypeError, PipelineError):
+                catalog = None  # Existing exact source bindings remain usable.
+            if catalog:
+                self.catalog_sha256 = catalog["catalog_sha256"]
+                occurrences = Counter(identity for row in catalog["entries"]
+                                      for identity in (row["source_id"], row.get("reference_id")) if identity)
+                for row in catalog["entries"]:
+                    canonical_id, reference_id = row["source_id"], row.get("reference_id")
+                    if reference_id and occurrences[canonical_id] == occurrences[reference_id] == 1:
+                        self.article_aliases[canonical_id, row["source_hash"]] = reference_id
+                        self.article_aliases[reference_id, row["source_hash"]] = canonical_id
 
     def _file(self, path: Path) -> dict[str, Any]:
         key = str(path.resolve())
@@ -359,7 +383,8 @@ class _SourceAudit:
                     self.refs[identity] = (audit, scope)
                     return audit, scope
             try:
-                _merge_scope(scope, _scope_from_document(self._zip_member(source, zip_prefix + "source.json")))
+                _merge_scope(scope, _scope_from_document(self._zip_member(source, zip_prefix + "source.json"),
+                                                        self.article_aliases if audit["status"] == "verified" else None))
             except (OSError, ValueError, KeyError, zipfile.BadZipFile):
                 pass
         if ref.get("snapshot_pointer"):
@@ -368,12 +393,16 @@ class _SourceAudit:
             except (KeyError, IndexError, TypeError):
                 audit["locator_status"] = "invalid"
                 snapshot = None
-        _merge_scope(scope, _scope_from_document(snapshot))
+        aliases = self.article_aliases if audit["status"] == "verified" else None
+        _merge_scope(scope, _scope_from_document(snapshot, aliases))
         # An exact package member may carry source metadata in its sibling.
         if target and target.name in {"conversation.json", "manifest.json", "source.json"}:
-            src = self._file(target.parent / "source.json")
+            identity_path = target.parent / "source.json"
+            src = self._file(identity_path)
             if src["available"]:
-                _merge_scope(scope, _scope_from_document(src.get("document")))
+                audit["source_identity_path"] = str(identity_path.resolve())
+                audit["source_identity_sha256"] = src["sha256"]
+                _merge_scope(scope, _scope_from_document(src.get("document"), aliases))
         locators = []
         for field in ("locator", "pointer"):
             if isinstance(ref.get(field), str):
@@ -462,8 +491,20 @@ def _current_manifest(state: Path) -> dict[str, Any] | None:
     return value
 
 
-def open_memory_projection(state: Path) -> tuple[sqlite3.Connection, dict[str, Any]]:
-    manifest = _current_manifest(state)
+def open_memory_projection(state: Path, *, known_generation: str | None = None) -> tuple[sqlite3.Connection, dict[str, Any]]:
+    if known_generation is None:
+        manifest = _current_manifest(state)
+    else:
+        if not re.fullmatch(r"[a-f0-9]{64}", known_generation):
+            raise ValidationError("invalid memory generation")
+        generation_path = state / "memory/generations" / known_generation
+        manifest_path = generation_path / "manifest.json"
+        if (manifest_path.resolve() != manifest_path
+                or generation_path.resolve() != generation_path):
+            raise ValidationError("historical memory manifest must be generation-bound")
+        manifest = load_json(manifest_path)
+        if manifest.get("schema_version") != PROJECTION_SCHEMA or manifest.get("generation") != known_generation:
+            raise ValidationError("historical memory manifest does not match its generation")
     if manifest is None:
         raise FileNotFoundError("memory projection is not built")
     generation = manifest.get("generation")
@@ -475,6 +516,8 @@ def open_memory_projection(state: Path) -> tuple[sqlite3.Connection, dict[str, A
     path = state / "memory" / expected
     if not path.is_file() or path.resolve().parent != (state / "memory/generations" / generation).resolve():
         raise ValidationError("memory database is unavailable or outside generation")
+    if known_generation is not None and (path.resolve() != path or file_sha256(path) != manifest.get("database_sha256")):
+        raise ValidationError("historical memory database digest does not match its manifest")
     db = sqlite3.connect(path.resolve().as_uri() + "?mode=ro&immutable=1", uri=True)
     db.row_factory = sqlite3.Row
     try:
@@ -504,7 +547,8 @@ def source_dependents(repo: Path, state: Path, paths: list[Path]) -> list[str]:
             placeholders = ",".join("?" for _ in bind)
             rows = db.execute("SELECT DISTINCT d.point_key FROM dependencies d JOIN sources s USING(source_key) "
                               f"WHERE json_extract(s.audit_json,'$.reference.path') IN ({placeholders}) "
-                              f"OR json_extract(s.audit_json,'$.resolved_path') IN ({placeholders})", (*bind, *bind))
+                              f"OR json_extract(s.audit_json,'$.resolved_path') IN ({placeholders}) "
+                              f"OR json_extract(s.audit_json,'$.source_identity_path') IN ({placeholders})", bind * 3)
             found = {row[0] for row in rows}
             if not found:
                 raise ValidationError("no indexed English memory dependency for the supplied source path")
@@ -533,7 +577,7 @@ def _insert_point(db: sqlite3.Connection, key: str, pointer: dict[str, Any], aud
                    "protected", 0, None, _json({"status": "invalid_summary", "issues": ["invalid_or_missing_summary"]}), "[]", "[]", "[]"))
         return
     scope = {"source_ids": set(), "unit_ids": set(), "question_ids": set(), "formal_ids": set(), "bindings": set()}
-    _merge_scope(scope, _scope_from_document(record))
+    _merge_scope(scope, _scope_from_document(record, audit.article_aliases))
     issues, inherited_protected, identities = [], False, []
     episode_ids = set()
     for ordinal, episode in enumerate(record["episodes"]):
@@ -542,7 +586,7 @@ def _insert_point(db: sqlite3.Connection, key: str, pointer: dict[str, Any], aud
             issues.append("duplicate_or_missing_episode_id")
             continue
         episode_ids.add(eid)
-        escope = _scope_from_document(episode)
+        escope = _scope_from_document(episode, audit.article_aliases)
         if isinstance(episode.get("resolved_sentence_id"), str):
             escope["unit_ids"].add(episode["resolved_sentence_id"])
         for value in episode.get("formal_ids", []):
@@ -578,7 +622,7 @@ def _insert_point(db: sqlite3.Connection, key: str, pointer: dict[str, Any], aud
                 source_eid = episode.get("source_episode_id")
                 parent_episodes = [e for e in parent.get("episodes", []) if e.get("episode_id") == source_eid] if source_eid else parent.get("episodes", [])
                 for pe in parent_episodes:
-                    _merge_scope(escope, _scope_from_document(pe))
+                    _merge_scope(escope, _scope_from_document(pe, audit.article_aliases))
                     for pref in pe.get("evidence", []):
                         if isinstance(pref, dict):
                             pending_refs.append((pref, depth + 1, ancestry | {digest}))
@@ -673,12 +717,15 @@ def build_memory_projection(repo: Path, state: Path, *, keys: list[str] | None =
         db = sqlite3.connect(":memory:")
         previous = None
         try:
+            audit = _SourceAudit(repo, state, audit_sources)
             if keys is not None:
                 try:
                     old, previous = open_memory_projection(state)
                     try:
                         old.backup(db)
-                        if dict(old.execute("SELECT name,value FROM metadata")).get("recipe") != RECIPE:
+                        metadata = dict(old.execute("SELECT name,value FROM metadata"))
+                        if (metadata.get("recipe") != RECIPE
+                                or metadata.get("source_catalog_sha256", "") != (audit.catalog_sha256 or "")):
                             previous = None
                     finally:
                         old.close()
@@ -693,13 +740,13 @@ def build_memory_projection(repo: Path, state: Path, *, keys: list[str] | None =
                 touched.update(k for k, v in pointers.items() if old_hashes.get(k) != v["sha256"])
             for key in set(old_hashes) - set(pointers):
                 _remove_point(db, key)
-            audit = _SourceAudit(repo, state, audit_sources)
             for key in sorted(touched):
                 if key in pointers:
                     _insert_point(db, key, pointers[key], audit)
             db.execute("DELETE FROM sources WHERE source_key NOT IN (SELECT source_key FROM dependencies)")
             counts = _counts(db)
             fingerprint = {"recipe": RECIPE, "summary_index_sha256": index_sha,
+                           "source_catalog_sha256": audit.catalog_sha256,
                            "points": list(db.execute("SELECT point_key,summary_sha256,answer_safe,audit_json,source_ids_json,unit_ids_json,question_ids_json FROM points ORDER BY point_key")),
                            "sources": list(db.execute("SELECT source_key,audit_json FROM sources ORDER BY source_key"))}
             generation = object_sha256(fingerprint)
@@ -707,11 +754,13 @@ def build_memory_projection(repo: Path, state: Path, *, keys: list[str] | None =
             db.execute("INSERT OR REPLACE INTO metadata VALUES('summary_index_sha256',?)", (index_sha,))
             db.execute("INSERT OR REPLACE INTO metadata VALUES('schema_version',?)", (PROJECTION_SCHEMA,))
             db.execute("INSERT OR REPLACE INTO metadata VALUES('recipe',?)", (RECIPE,))
+            db.execute("INSERT OR REPLACE INTO metadata VALUES('source_catalog_sha256',?)", (audit.catalog_sha256 or "",))
             db.commit()
             receipt = {"schema_version": PROJECTION_SCHEMA, "status": "preview", "generation": generation,
                        "summary_index_sha256": index_sha, "counts": counts,
                        "keys": sorted(pointers), "updated_keys": sorted(touched & set(pointers)),
                        "formal_write_count": 0, "learning_event_write_count": 0,
+                       "source_catalog_sha256": audit.catalog_sha256,
                        "source_audit_performed": audit_sources, "previous_generation": (previous or {}).get("generation")}
             if not publish:
                 return receipt
@@ -740,6 +789,7 @@ def build_memory_projection(repo: Path, state: Path, *, keys: list[str] | None =
                         "summary_index_sha256": index_sha, "database": f"generations/{generation}/memory.sqlite3",
                         "database_sha256": file_sha256(generation_dir / "memory.sqlite3"),
                         "mirror": f"generations/{generation}/safe-mirror", "counts": counts,
+                        "source_catalog_sha256": audit.catalog_sha256,
                         "source_audit_performed": audit_sources,
                         "created_at": utc_now(), "previous_generation": (previous or {}).get("generation")}
             if (generation_dir / "manifest.json").exists():
@@ -758,15 +808,18 @@ def build_memory_projection(repo: Path, state: Path, *, keys: list[str] | None =
 
 def _mirror_markdown(record: dict[str, Any], generation: str, scopes: dict[str, Any], summary_sha256: str | None = None) -> str:
     key = record["key"]
+    group, ordered = select_observations(record["episodes"], record)
+    hint = (record["teaching_hint"] if len(group) == 1
+            else "当前观察的先后未确定，待核对原有观察及提示依赖。")
     header = ["---", f"title: {_json(key)}", f"canonical_key: {_json(key)}", "type: english-memory-projection",
               "visibility: answer_free", f"summary_sha256: {_json(summary_sha256 or object_sha256(record))}",
               "locked: true",
               f"source_ids: {_json(scopes['source_ids'])}", f"unit_ids: {_json(scopes['unit_ids'])}",
               "qmd:", "  metadata:", f"    canonical_key: {_json(key)}", "    visibility: answer_free", "---", "",
               f"# {key}", "", "本页是已发布摘要的可重建投影；检索命中不证明本次错误或掌握。", "",
-              "## 当前教学提示", "", record["teaching_hint"], "", "判断类型：legacy_unclassified（保留既有教学文本，未升级为逐结论事实）。", "",
+              "## 当前教学提示", "", hint, "", "判断类型：legacy_unclassified（既有教学文本须回到原证据核对）。", "",
               "## Observations", ""]
-    for episode in record.get("episodes", []):
+    for episode in ordered:
         for category, label, field, observed in (
                 ("learner_first_attempt", "首答", "first_attempt", episode.get("observed_at") or episode.get("study_date")),
                 ("teaching_correction", "纠正", "correction", episode.get("correction_observed_at") or episode.get("corrected_at")),
@@ -793,7 +846,8 @@ def _mirror_markdown(record: dict[str, Any], generation: str, scopes: dict[str, 
     header.append("")
     header.extend(["## 来源定位", ""])
     for path in scopes["source_ids"]:
-        header.append(f"- {path}")
+        pkg=re.search(r"(?:^|/)intake/packages/\d{4}-\d{2}-\d{2}/(EN-PKG-\d{8}-[A-F0-9]{16})(?:/|$)",path)
+        header.append(f"- {pkg[1]}" if pkg else f"- {path}")
     return "\n".join(header) + "\n"
 
 
@@ -841,12 +895,12 @@ def export_safe_mirror(repo: Path, state: Path, destination: Path | None = None,
                        lifecycle_override: dict[str, Any] | None = None) -> dict[str, Any]:
     """Export a lifecycle-filtered mirror for an explicitly initiated index job."""
     db, manifest = open_memory_projection(state)
+    snapshot = _projection_snapshot(state, manifest)
+    lifecycle = lifecycle_override if lifecycle_override is not None else read_lifecycle(state)
+    if destination is None:
+        version = object_sha256({"generation": manifest["generation"], "lifecycle": lifecycle_fingerprint(lifecycle)})
+        destination = state / "memory/exports" / version / "safe-mirror"
     try:
-        snapshot = _projection_snapshot(state, manifest)
-        lifecycle = lifecycle_override if lifecycle_override is not None else read_lifecycle(state)
-        if destination is None:
-            version = object_sha256({"generation": manifest["generation"], "lifecycle": lifecycle_fingerprint(lifecycle)})
-            destination = state / "memory/exports" / version / "safe-mirror"
         _assert_snapshot(state, manifest, snapshot)
         result = _write_mirror(db, destination, manifest["generation"], lifecycle)
         _assert_snapshot(state, manifest, snapshot)
@@ -866,19 +920,22 @@ def export_safe_mirror(repo: Path, state: Path, destination: Path | None = None,
 def publish_managed_pages(repo: Path, state: Path, *, lifecycle_override: dict[str, Any] | None = None) -> dict[str, Any]:
     """Write only dedicated managed blocks; all user-authored surrounding text stays."""
     db, manifest = open_memory_projection(state)
+    snapshot = _projection_snapshot(state, manifest)
+    directory = repo / "wiki/memory"
+    _assert_snapshot(state, manifest, snapshot)
+    directory.mkdir(parents=True, exist_ok=True)
+    lifecycle = lifecycle_override if lifecycle_override is not None else read_lifecycle(state)
+    begin, end = "<!-- english-memory:begin -->", "<!-- english-memory:end -->"
+    updated, conflicts = [], []
+    links = []
+    current_names = set()
     try:
-        snapshot = _projection_snapshot(state, manifest)
-        directory = repo / "wiki/memory"
-        _assert_snapshot(state, manifest, snapshot)
-        directory.mkdir(parents=True, exist_ok=True)
-        lifecycle = lifecycle_override if lifecycle_override is not None else read_lifecycle(state)
-        begin, end = "<!-- english-memory:begin -->", "<!-- english-memory:end -->"
-        updated, conflicts = [], []
-        links = []
-        current_names = set()
         safe_pages = {key: re.sub(r"[^\w.-]+", "-", key)[:70] + "-" + key_hash(key)[:8]
                       for (key,) in db.execute("SELECT point_key FROM points WHERE answer_safe=1")}
         def visible_link(label: str) -> str:
+            pkg=re.search(r"(?:^|/)intake/packages/\d{4}-\d{2}-\d{2}/(EN-PKG-\d{8}-[A-F0-9]{16})(?:/|$)",label)
+            if pkg:
+                return f"[[wiki/raw_archives/{pkg[1]}|封存原件 {pkg[1]}]]"
             if label in safe_pages:
                 return f"[[{safe_pages[label]}|{label}]]"
             target = Path(label) if Path(label).is_absolute() else repo / label
@@ -964,8 +1021,14 @@ def publish_managed_pages(repo: Path, state: Path, *, lifecycle_override: dict[s
         else:
             conflicts.append("index.md")
         _assert_snapshot(state, manifest, snapshot)
+        writing_home=None
+        if (repo/"wiki/writing/个人作文学习摘要.md").exists() or db.execute(
+                "SELECT 1 FROM points WHERE point_key LIKE 'writing_skill:%' LIMIT 1").fetchone():
+            from .writing_coach import publish_home
+            writing_home=publish_home(repo,state,db,manifest,lifecycle)
+            _assert_snapshot(state,manifest,snapshot)
         return {"status": "partial" if conflicts else "published", "generation": manifest["generation"],
-                "page_count": len(links), "updated_count": len(updated), "conflicts": conflicts,
+                "writing_home":writing_home,"page_count": len(links), "updated_count": len(updated), "conflicts": conflicts,
                 "index_path": str(path), "formal_write_count": 0}
     finally:
         db.close()

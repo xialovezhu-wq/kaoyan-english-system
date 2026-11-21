@@ -257,7 +257,10 @@ def _scan_package_references(
     host_paths: list[Path],
 ) -> dict[str, Any]:
     temporary_path = str(plan.get("temporary_package_path") or package_root)
-    needles = {temporary_path, "/Volumes/T9-Data"}
+    # Temporary references to this package are invalid anywhere.  The absolute
+    # archive-path rule is scoped to this package's display hosts: unrelated
+    # memory projections legitimately retain provenance for older archives.
+    needles = {temporary_path}
     try:
         needles.add(Path(temporary_path).resolve().relative_to(repo_root).as_posix())
     except (OSError, ValueError):
@@ -278,7 +281,12 @@ def _scan_package_references(
             text = host.read_text(encoding="utf-8")
         except UnicodeDecodeError:
             continue
-        for needle in sorted(needles):
+        host_needles = set(needles)
+        if host in host_paths or re.search(
+            r"/Volumes/T9-Data[^\s<>\"']*" + re.escape(plan["package_id"]), text
+        ):
+            host_needles.add("/Volumes/T9-Data")
+        for needle in sorted(host_needles):
             if needle and needle in text:
                 violations.append(
                     {"host_markdown_relative_path": host.relative_to(repo_root).as_posix(), "reference": needle}

@@ -47,7 +47,7 @@ def freeze_nightly(
         else:
             eligible.append(row)
     if waiting and requested_package_ids is not None:
-        raise ValidationError("WAITING_WEB_REVIEW: " + ", ".join(waiting))
+        raise ValidationError("WAITING_WEB_REVIEW (legacy hold): use plan-local-intake and its exact local_review_id for " + ", ".join(waiting))
     documents = eligible
     package_ids = [row["package_id"] for row in documents]
     package_sha256s = [row["package_sha256"] for row in documents]

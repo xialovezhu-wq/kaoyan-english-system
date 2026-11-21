@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Any, Iterable
 from zoneinfo import ZoneInfo
 
+from .cold_storage import cold_artifacts, cold_directory, guard_write
 from .errors import IdempotencyConflict, ValidationError
 from .util import (
     atomic_write_json,
@@ -24,6 +25,7 @@ from .util import (
     load_json,
     object_sha256,
     parse_iso_date,
+    sentence_sha256,
     utc_now,
     exclusive_lock,
 )
@@ -207,6 +209,36 @@ def _attachment_inputs(value: Any) -> list[dict[str, Any]]:
     return result
 
 
+def whole_article_unit_id(identity: dict[str, Any]) -> str | None:
+    """Recognize the native full-article identity without inventing a segment.
+
+    Native source preparation supplies the existing article reference and complete
+    text. An arbitrary unit_id alone must never become a source binding, and a
+    finer-grained identity always keeps its existing route.
+    """
+    if any(identity.get(field) for field in (
+        "paragraph_id", "sentence_id", "knowledge_point_id", "question_id"
+    )):
+        return None
+    reference_id = identity.get("reference_id")
+    if (not isinstance(reference_id, str) or not reference_id.strip()
+            or reference_id != reference_id.strip()
+            or identity.get("unit_id") != reference_id
+            or not isinstance(identity.get("source_kind"), str)
+            or identity.get("source_kind") not in {"article", "explanation"}
+            or not isinstance(identity.get("source_id"), str)
+            or not identity["source_id"].strip()
+            or not isinstance(identity.get("source_hash"), str)
+            or not _SHA256_RE.fullmatch(identity["source_hash"])
+            or not isinstance(identity.get("source_sentence"), str)
+            or not identity["source_sentence"].strip()):
+        return None
+    if (identity.get("sentence_sha256")
+            and identity["sentence_sha256"] != sentence_sha256(identity["source_sentence"])):
+        return None
+    return reference_id
+
+
 def _source_document(request: dict[str, Any]) -> tuple[dict[str, Any], list[str]]:
     supplied = request.get("source")
     if supplied is None:
@@ -233,7 +265,7 @@ def _source_document(request: dict[str, Any]) -> tuple[dict[str, Any], list[str]
     if not any(
         identity.get(field)
         for field in ("paragraph_id", "sentence_id", "knowledge_point_id", "question_id")
-    ):
+    ) and whole_article_unit_id(identity) is None:
         missing.append("source.segment_identity")
     return source, sorted(set(missing))
 
@@ -509,6 +541,10 @@ def _frontier_event_from_receipt(receipt: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def unit_binding_path(state: Path, thread_ref_sha256: str, segment_key: str) -> Path:
+    return state / "unit-captures" / f"{object_sha256([thread_ref_sha256, segment_key])}.json"
+
+
 def create_conversation_package(
     state_dir: Path,
     request: dict[str, Any],
@@ -581,6 +617,9 @@ def create_conversation_package(
         path = item["path"]
         data = path.read_bytes()
         _check_deadline(deadline)
+        digest = bytes_sha256(data)
+        if "expected_sha256" in item and item["expected_sha256"] != digest:
+            raise ValidationError("attachment bytes differ from the referenced revision")
         relative = Path("attachments") / _safe_filename(index, path.name)
         mime = item.get("mime_type") or mimetypes.guess_type(path.name)[0] or "application/octet-stream"
         descriptor: dict[str, Any] = {
@@ -589,7 +628,7 @@ def create_conversation_package(
             "role": item["role"],
             "mime_type": mime,
             "bytes": len(data),
-            "sha256": bytes_sha256(data),
+            "sha256": digest,
         }
         if item.get("message_sequence") is not None:
             descriptor["message_sequence"] = item["message_sequence"]
@@ -708,8 +747,8 @@ def create_conversation_package(
     receipt["package_path"] = str(package_root)
     if independent:
         # The binding belongs to this attempt only; another unit cannot block it.
-        unit_key = object_sha256([thread_ref_sha256, segment_key])
-        binding_path = resolved_state / "unit-captures" / f"{unit_key}.json"
+        binding_path = unit_binding_path(resolved_state, thread_ref_sha256, segment_key)
+        unit_key = binding_path.stem
         binding = {"schema_version": "english_unit_capture_binding_v1",
                    "thread_ref_sha256": thread_ref_sha256, "segment_key": segment_key,
                    "request_sha256": request_sha256, "package_id": package_id,
@@ -1178,6 +1217,7 @@ def package_records(
     return sorted(records, key=lambda row: row["package_id"])
 
 
+@cold_artifacts("article-completion")
 def complete_article_packages(
     state_dir: Path,
     *,
@@ -1251,9 +1291,6 @@ def complete_article_packages(
         }
     )[:16].upper()
     completion_id = f"EN-COMPLETE-{completion_date.replace('-', '')}-{identity}"
-    destination = output_dir or state_dir / "views" / completion_date
-    export_json = destination / f"{completion_id}.json"
-    export_markdown = destination / f"{completion_id}.md"
     snapshot = {
         "schema_version": "english_article_package_snapshot_v1",
         "completion_id": completion_id,
@@ -1283,6 +1320,23 @@ def complete_article_packages(
         ]
     )
     receipt_path = state_dir / "receipts" / "completion" / completion_date / f"{completion_id}.json"
+    existing = load_json(receipt_path) if receipt_path.exists() else None
+    if existing:
+        if existing.get("package_sha256s") != [row["package_sha256"] for row in records]:
+            raise IdempotencyConflict("article completion key already binds a different package set")
+        old_json, old_markdown = Path(existing["export_json"]), Path(existing["export_markdown"])
+        if (old_json.is_file() and load_json(old_json) == snapshot
+                and old_markdown.is_file() and old_markdown.read_text(encoding="utf-8") == markdown):
+            # A pre-policy receipt remains valid at its original readable paths.
+            # Current T9 snapshots are also registered again after a failed hook.
+            from .cold_storage import COLD_ROOT
+            if old_json.parent.is_symlink() or old_json.resolve().is_relative_to(COLD_ROOT.parent):
+                cold_directory(old_json.parent, "article-completions", completion_id, explicit=True)
+            return {**existing, "status": "idempotent_noop"}
+    destination = cold_directory(output_dir or state_dir / "views" / completion_date / completion_id,
+                                 "article-completions", completion_id, explicit=output_dir is not None)
+    export_json = destination / f"{completion_id}.json"
+    export_markdown = destination / f"{completion_id}.md"
     receipt = {
         "schema_version": "english_article_completion_receipt_v2",
         "receipt_id": completion_id,
@@ -1297,23 +1351,13 @@ def complete_article_packages(
         "formal_write_count": 0,
         "background_processing": "none",
     }
-    if receipt_path.exists():
-        existing = load_json(receipt_path)
-        if existing.get("package_sha256s") != receipt["package_sha256s"]:
-            raise IdempotencyConflict("article completion key already binds a different package set")
-        # The raw package/receipt is immutable. Its locator-only snapshot is a
-        # rebuildable view and must follow an exact move from local staging to T9.
-        if not export_json.is_file() or load_json(export_json) != snapshot:
-            atomic_write_json(export_json, snapshot)
-        if not export_markdown.is_file() or export_markdown.read_text(encoding="utf-8") != markdown:
-            atomic_write_text(export_markdown, markdown)
-        replay = dict(existing)
-        replay["status"] = "idempotent_noop"
-        return replay
+    guard_write(export_json, canonical_bytes(snapshot))
+    guard_write(export_markdown, markdown.encode("utf-8"))
     atomic_write_json(export_json, snapshot)
     atomic_write_text(export_markdown, markdown)
+    # This small hot receipt holds current locators, never the exported content.
     atomic_write_json(receipt_path, receipt)
-    return receipt
+    return {**receipt, "status": "idempotent_noop"} if existing else receipt
 
 
 def frozen_package_overrides(state_dir: Path, repo_root: Path, manifest: dict[str, Any], *, archive_contract: Any = None) -> dict[str, Path]:

@@ -6,6 +6,10 @@ class ValidationError(PipelineError):
     pass
 
 
+class FormalModelReviewPending(ValidationError):
+    """The exact batch can resume pre-transaction review; formal apply is unstarted."""
+
+
 class IdempotencyConflict(PipelineError):
     pass
 

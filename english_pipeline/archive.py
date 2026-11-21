@@ -36,7 +36,7 @@ from .util import (
 T9_ARCHIVE_ROOT = Path("/Volumes/T9-Data")
 ENGLISH_ARCHIVE_RELATIVE_ROOT = Path("02_英语/资料库/原始会话资料")
 SENTINEL_RELATIVE_PATH = Path("00_迁移管理/状态/volume-sentinel.json")
-T9_SENTINEL_SHA256 = "f086b32b29b2b38f1a28dffb8fde4fa850078332d8a23ae269cc8e857a6bd2ca"
+T9_SENTINEL_SHA256 = "0000000000000000000000000000000000000000000000000000000000000000"
 T9_VOLUME_NAME = "T9-Data"
 T9_VOLUME_UUID = "00000000-0000-0000-0000-000000000000"
 
@@ -845,7 +845,7 @@ def retry_archived_publication(
     publication_runner: Callable[..., dict[str, Any]] | None = None,
     retry_publication: bool = False,
 ) -> dict[str, Any] | None:
-    """Reopen an existing final event; never refresh support or repeat cleanup.
+    """Reopen an existing archive for local readback or explicit publication.
 
     The caller has validated the canonical writer closeout. Reconstructing the
     content basis also supports hooks written before that basis was stored.
@@ -877,12 +877,11 @@ def retry_archived_publication(
     digest = object_sha256(basis)
     event_id = writer_receipt["receipt_id"] + ":closeout:" + digest[:24]
     target = state_dir / "publication" / f"{event_id}.json"
-    if not target.is_file():
-        return None
-    previous = load_json(target)
-    if (previous.get("event_id") != event_id or previous.get("schema_version") != "english_publication_hook_receipt_v1"
-            or previous.get("archive_basis_sha256", digest) != digest):
-        raise ValidationError("archive publication event binding mismatch")
+    if (retry_publication or publication_runner is not None) and target.is_file():
+        previous = load_json(target)
+        if (previous.get("event_id") != event_id or previous.get("schema_version") != "english_publication_hook_receipt_v1"
+                or previous.get("archive_basis_sha256", digest) != digest):
+            raise ValidationError("archive publication event binding mismatch")
     from .publication import complete_formal_closeout
     publication = complete_formal_closeout(repo_root, state_dir, writer_receipt,
         runner=publication_runner, retry_publication=retry_publication, archive_basis_sha256=digest)
@@ -892,7 +891,8 @@ def retry_archived_publication(
             "archive_receipt_sha256": file_sha256(archive_path), "package_results": receipt["package_results"],
             "cleanup_results": [{"package_id": key, "status": "idempotent_noop"} for key in cleaned],
             "retained_package_ids": receipt["retained_package_ids"], "publication": publication,
-            "publication_only": True, "formal_write_count": 0}
+            "local_quality": publication["local_quality"], "publication_only": retry_publication,
+            "formal_write_count": 0}
 
 
 def archive_committed_batch(
@@ -1279,6 +1279,7 @@ def archive_committed_batch(
         "cleanup_results": cleanup_results,
         "retained_package_ids": retained_package_ids,
         "publication": publication,
+        "local_quality": publication["local_quality"],
         "formal_write_count": 0,
     }
 

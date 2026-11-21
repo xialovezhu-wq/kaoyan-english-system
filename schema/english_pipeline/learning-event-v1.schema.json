@@ -127,6 +127,452 @@
     },
     "correction": {
       "type": "string"
+    },
+    "writing": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "contract",
+        "lesson_sha256",
+        "asset_id",
+        "direction",
+        "phase",
+        "package_id",
+        "message_index",
+        "response_sha256",
+        "matched_text",
+        "hint",
+        "model_suggestion",
+        "issue",
+        "template_change",
+        "task_prompt"
+      ],
+      "properties": {
+        "contract": {
+          "const": "english-read-write/1"
+        },
+        "lesson_sha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "asset_id": {
+          "type": "string",
+          "pattern": "^RW-[a-f0-9]{24}$"
+        },
+        "direction": {
+          "enum": [
+            "listening_recognition",
+            "paraphrase_or_summary",
+            "reading_recognition",
+            "speaking_production",
+            "translation_en_zh",
+            "translation_zh_en",
+            "writing_production"
+          ]
+        },
+        "phase": {
+          "enum": [
+            "first_draft",
+            "recognition",
+            "revision",
+            "transfer"
+          ]
+        },
+        "package_id": {
+          "type": "string",
+          "pattern": "^EN-PKG-[0-9]{8}-[A-F0-9]{16}$"
+        },
+        "message_index": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "response_sha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "matched_text": {
+          "type": "string"
+        },
+        "hint": {
+          "type": "string"
+        },
+        "model_suggestion": {
+          "type": "string"
+        },
+        "issue": {
+          "anyOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "offset",
+                "length",
+                "quote",
+                "category",
+                "message"
+              ],
+              "properties": {
+                "offset": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "length": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "quote": {
+                  "type": "string"
+                },
+                "category": {
+                  "type": "string"
+                },
+                "message": {
+                  "type": "string"
+                }
+              }
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "template_change": {
+          "anyOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "expression",
+                "slots",
+                "applies_when",
+                "avoid_when",
+                "reason"
+              ],
+              "properties": {
+                "expression": {
+                  "type": "string"
+                },
+                "slots": {
+                  "type": "string"
+                },
+                "applies_when": {
+                  "type": "string"
+                },
+                "avoid_when": {
+                  "type": "string"
+                },
+                "reason": {
+                  "type": "string"
+                }
+              }
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "task_prompt": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "writing_memory": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "attempt_id",
+        "feedback_ids",
+        "finding",
+        "host",
+        "message_id",
+        "method",
+        "next_check",
+        "original_sha256",
+        "point_key",
+        "session_id",
+        "shared_keys",
+        "stage",
+        "task_id",
+        "version"
+      ],
+      "properties": {
+        "attempt_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "feedback_ids": {
+          "type": "array",
+          "maxItems": 16,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "finding": {
+          "type": "string",
+          "minLength": 1
+        },
+        "host": {
+          "enum": [
+            "codex",
+            "t3",
+            "chatgpt"
+          ]
+        },
+        "message_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "method": {
+          "enum": [
+            "ask_for_reason",
+            "chinese_reason",
+            "compare_versions",
+            "minimal_edit",
+            "none",
+            "outline_actions"
+          ]
+        },
+        "next_check": {
+          "type": "string",
+          "minLength": 1
+        },
+        "original_sha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "point_key": {
+          "enum": [
+            "writing_skill:task_coverage",
+            "writing_skill:reader_action",
+            "writing_skill:argument_support",
+            "writing_skill:concession",
+            "writing_skill:cohesion",
+            "writing_skill:register",
+            "writing_skill:data_description",
+            "writing_skill:language_control",
+            "writing_skill:feedback_method"
+          ]
+        },
+        "session_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "shared_keys": {
+          "type": "array",
+          "uniqueItems": true,
+          "maxItems": 8,
+          "items": {
+            "type": "string",
+            "pattern": "^(word|phrase|syntax):.+"
+          }
+        },
+        "stage": {
+          "enum": [
+            "acknowledgment",
+            "first_draft",
+            "preference",
+            "question",
+            "revision",
+            "transfer",
+            "adoption"
+          ]
+        },
+        "task_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "version": {
+          "const": "english-writing-observation/2"
+        },
+        "submission": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "medium",
+            "verification"
+          ],
+          "properties": {
+            "medium": {
+              "enum": [
+                "submitted_text",
+                "typed",
+                "handwritten",
+                "speech_to_text",
+                "ocr",
+                "copied",
+                "mixed",
+                "unknown"
+              ]
+            },
+            "verification": {
+              "enum": [
+                "as_submitted",
+                "checked_original",
+                "unverified"
+              ]
+            },
+            "attachment_sha256": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            }
+          }
+        },
+        "message_version": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "number",
+            "previous_package_id",
+            "previous_package_sha256",
+            "fingerprint",
+            "source_updated_at"
+          ],
+          "properties": {
+            "number": {
+              "type": "integer",
+              "minimum": 2
+            },
+            "previous_package_id": {
+              "type": "string"
+            },
+            "previous_package_sha256": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            "fingerprint": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            "source_updated_at": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        },
+        "writing_task": {
+          "type": "object",
+          "required": [
+            "task_cue",
+            "answer_support",
+            "task_relation",
+            "production_origin",
+            "target_result",
+            "eligibility",
+            "task_sha256",
+            "observation_id",
+            "open_task_transfer_observed"
+          ],
+          "properties": {
+            "task_cue": {
+              "enum": [
+                "form",
+                "function",
+                "none",
+                "unknown"
+              ]
+            },
+            "answer_support": {
+              "enum": [
+                "none",
+                "hint",
+                "example",
+                "ai_rewrite",
+                "unknown"
+              ]
+            },
+            "task_relation": {
+              "enum": [
+                "same_task",
+                "new_task_same_context",
+                "new_context",
+                "unknown"
+              ]
+            },
+            "production_origin": {
+              "enum": [
+                "human_initial",
+                "human_revision",
+                "ai_or_mixed",
+                "unknown"
+              ]
+            },
+            "target_result": {
+              "enum": [
+                "met",
+                "not_met",
+                "not_applicable",
+                "unknown"
+              ]
+            },
+            "eligibility": {
+              "enum": [
+                "eligible",
+                "ineligible",
+                "eligibility_pending"
+              ]
+            },
+            "activity": {
+              "const": "writing"
+            },
+            "open_task_transfer_observed": {
+              "type": "boolean"
+            }
+          }
+        },
+        "surface_reviews": {
+          "type": "object",
+          "description": "Prior visible messages keyed by native message ID with source SHA, cue, support and review reason."
+        }
+      }
     }
-  }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "source_id": {
+            "pattern": "^WRCOURSE-"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "writing"
+        ]
+      },
+      "else": {
+        "not": {
+          "required": [
+            "writing"
+          ]
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "source_id": {
+            "pattern": "^WRUNIT-"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "writing_memory"
+        ]
+      },
+      "else": {
+        "not": {
+          "required": [
+            "writing_memory"
+          ]
+        }
+      }
+    }
+  ]
 }

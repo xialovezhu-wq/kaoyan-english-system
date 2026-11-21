@@ -53,3 +53,5 @@ Capture 只记录事实，`formal_write_count=0`、`background_processing=none`�
 明确正式入库转 kaoyan-english-daily-intake-curation；网页返回转 kaoyan-english-web-return。整篇学习结束需要网页整理时，先按授权封存尚未保存的完整单元，再转 kaoyan-english-web-bundle。导出词表按 kaoyan-english-vocab-export 的正式依据执行。
 
 核对用户当前完整作答确实正确时，已可用的官方 Codex confetti 工具可按既有偏好静默调用一次；不重复探测，不为庆祝创建 Capture，不等同掌握。
+
+读后短写、首稿定位和课后原件核对沿[读写任务合同](references/reading-writing-v2.md)使用现有作文与正式收尾入口。

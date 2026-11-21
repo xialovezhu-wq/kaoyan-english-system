@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="zh-CN" data-page-version="__PAGE_VERSION__">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>整篇精读 · 英语</title><link rel="stylesheet" href="/english/ui/reader.css">
+<script defer src="/english/ui/reader.js"></script></head>
+<body>
+<header><span class="brand">英语精读</span><span id="identity"></span><output id="version" aria-live="polite">正在核对当前阅读范围</output></header>
+<div class="layout" id="reader" hidden>
+<nav aria-label="段落与句子"><label><span>篇内查找</span><input id="search" type="search" placeholder="原文、首译或讲解" autocomplete="off"></label><div id="toc"></div></nav>
+<section id="word-review" aria-labelledby="word-review-title" hidden>
+  <div class="review-head"><h2 id="word-review-title">本篇常看词</h2><div>
+    <button id="mask-meanings" type="button" aria-pressed="false">遮住释义</button>
+    <button id="next-words" type="button">换一组</button>
+  </div></div>
+  <div id="review-words"></div>
+</section>
+<main id="notes" aria-labelledby="focus-heading"><div class="notes-head"><h1 id="focus-heading" tabindex="-1">本句精读</h1><button id="jump"></button></div>
+<div id="focus"></div></main>
+<div class="references">
+  <details id="originals"><summary id="title">整篇原文与作答</summary><div id="article"></div></details>
+  <details id="words" hidden><summary id="words-label">本篇词语</summary><div id="words-list"></div></details>
+  <details id="recap" hidden><summary>同篇已讲要点</summary><div id="recap-list"></div></details>
+</div>
+</div>
+<noscript>启用 JavaScript 后可读取当前获准的文章内容。</noscript>
+</body></html>

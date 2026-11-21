@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import tempfile
 import unicodedata
 import fcntl
@@ -69,6 +70,35 @@ def text_sha256(value: str) -> str:
 
 def normalize_sentence(value: str) -> str:
     return " ".join(unicodedata.normalize("NFC", value).split())
+
+
+def learner_message_spans(message: Any, source_text: str = "") -> tuple[str, ...]:
+    """Read learner-authored spans without treating a quoted source as their words."""
+    if not isinstance(message, dict) or message.get("role") != "user" or not isinstance(message.get("content"), str):
+        return ()
+    text = message["content"]
+    spans = text.split(source_text) if source_text else [text]
+    authored = []
+    for span in spans:
+        if re.search(r"(?m)^[ \t]{0,3}>", span):
+            # An unmarked continuation in the same paragraph can be quoted.
+            for part in re.split(r"\r?\n[ \t]*\r?\n", span):
+                authored.append(re.split(r"(?m)^[ \t]{0,3}>", part, maxsplit=1)[0])
+        else:
+            authored.append(span)
+    return tuple(part for part in authored if part.strip())
+
+
+def captured_reference_text(conversation: Path) -> str:
+    path = conversation.with_name("source.json")
+    if conversation.name != "conversation.json" or not path.is_file():
+        return ""
+    source = load_json(path)
+    if source.get("schema_version") != "english_conversation_source_v1":
+        return ""
+    identity = source.get("identity")
+    text = identity.get("source_sentence") if isinstance(identity, dict) else None
+    return text if isinstance(text, str) and text.strip() else ""
 
 
 def sentence_sha256(value: str) -> str:

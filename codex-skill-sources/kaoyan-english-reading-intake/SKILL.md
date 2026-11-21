@@ -30,3 +30,5 @@ formal_write_count=0、background_processing=none、model_call_count=0、mcp_cal
 临时包或附件绝对路径只属于证据容器，不写入正式 Obsidian 页面。正式入库后才发布展示素材与归档。摘要只在正式入库后更新。
 
 保存完整的原始顺序，包括首答、助手解释、确认理解和后续真实作答。正式语义核对由后置审阅负责。快速保存不读取、更新或等待按点记忆索引。
+
+读后短写、首稿定位和课后原件核对沿[读写任务合同](../kaoyan-english-intensive-reading/references/reading-writing-v2.md)使用现有作文与正式收尾入口。

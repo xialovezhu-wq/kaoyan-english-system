@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from .errors import ValidationError
-from .sources import build_source_catalog
+from .sources import build_source_catalog, resolve_article_source
 from .util import atomic_write_json, canonical_bytes, file_sha256, load_json, object_sha256, text_sha256
 
 
@@ -254,22 +254,160 @@ def verify(repo_root: Path, output: Path) -> dict[str, Any]:
             "formal_write_count": 0}
 
 
-def query(output: Path, *, source_id: str, unit_id: str | None = None,
-          repo_root: Path | None = None) -> dict[str, Any]:
-    record = load_json(output / "articles" / f"{source_id}.json")
+def _source_identity(source_id: str) -> None:
+    if not isinstance(source_id, str) or not source_id or "/" in source_id or "\\" in source_id or "\x00" in source_id:
+        raise ValidationError("invalid reading source ID")
+
+
+class UnknownReadingSource(ValidationError):
+    """The available preparation index has no such ID or alias."""
+
+
+def query(output: Path, *, source_id: str, unit_id: str | None = None, paragraph_id: str | None = None,
+          repo_root: Path | None = None, source_hash: str | None = None,
+          record_sha256: str | None = None) -> dict[str, Any]:
+    _source_identity(source_id)
+    path = output / "articles" / f"{source_id}.json"
+    binding = None
+    prepared_index = False
+    canonical_id = source_id
+    index_path = output / "index.json"
+    if repo_root is not None and (index_path.is_file() or not path.exists()):
+        if index_path.is_file():
+            index = load_json(index_path)
+            index_body = {key: value for key, value in index.items() if key != "index_sha256"}
+            if (index.get("schema_version") != SCHEMA or index.get("visibility") != "practice_safe"
+                    or index.get("answer_exposure") != "answer_free"
+                    or object_sha256(index_body) != index.get("index_sha256")):
+                raise ValidationError("reading preparation alias index is stale or invalid")
+            entries = index["entries"]
+            prepared_index = True
+        else:
+            entries = build_source_catalog(repo_root)["entries"]
+        matches = [entry for entry in entries if source_id in (entry["source_id"], entry.get("reference_id"))]
+        if not matches and not path.exists():
+            raise UnknownReadingSource("reading preparation has no matching source or alias")
+        if len(matches) != 1:
+            raise ValidationError("reading preparation source is unindexed or ambiguous")
+        binding = matches[0]
+        canonical_id = binding["source_id"]
+        _source_identity(canonical_id)
+        path = output / "articles" / f"{canonical_id}.json"
+    record = load_json(path)
+    if record.get("source_id") != canonical_id:
+        raise ValidationError("reading preparation source identity differs from its filename")
+    identity_fields = ("source_id", "source_hash", "reference_id", "source_article", "canonical_path")
+    if binding is not None:
+        binding_fields = identity_fields + (("record_sha256", "practice_source_sha256") if prepared_index else ())
+        if any(record.get(key) != binding.get(key) for key in binding_fields):
+            raise ValidationError("reading preparation source alias differs from the verified catalog")
     if record.get("visibility") != "practice_safe" or record.get("answer_exposure") != "answer_free":
         raise ValidationError("reading preparation record is not answer-safe")
     core = {key: value for key, value in record.items() if key != "record_sha256"}
     if object_sha256(core) != record.get("record_sha256"):
         raise ValidationError("reading preparation record hash is invalid")
+    if ((source_hash is not None and (not isinstance(source_hash, str)
+                                     or source_hash.removeprefix("sha256:") != record["source_hash"]))
+            or (record_sha256 is not None and record_sha256 != record["record_sha256"])):
+        raise ValidationError("reading source version changed; query the current revision separately")
     if repo_root is not None:
         source = repo_root.resolve(strict=True) / record["canonical_path"]
         if file_sha256(source) != record.get("practice_source_sha256"):
             raise ValidationError("reading preparation source changed; rebuild before teaching")
+        if prepared_index:
+            live = resolve_article_source(repo_root, record["source_article"])
+            if any(live.get(key) != binding.get(key) for key in identity_fields if key != "reference_id"):
+                raise ValidationError("reading preparation alias differs from its current source")
+            if live["reference_id"] != record["reference_id"]:
+                # One legacy handoff declares the exam alias only in the answer-free corpus.
+                match = re.fullmatch(r"EXAM-READING-(20\d{2})-T([1-4])", record["reference_id"] or "")
+                if live["reference_id"] or live["binding_kind"] != "handoff" or not match:
+                    raise ValidationError("reading preparation exam reference changed")
+                corpus = load_json(repo_root / "raw/articles/exam-reading-corpus" / match[1] / f"text-{match[2]}.json")
+                if (corpus.get("visibility") != "practice_safe" or corpus.get("schema") != "exam_reading_practice_safe_v1"
+                        or corpus.get("article_path") != record["source_article"]
+                        or any(corpus.get(key) != record[key] for key in ("source_id", "reference_id"))):
+                    raise ValidationError("reading preparation exam reference has no matching corpus source")
+    scope = {"schema_version": SCHEMA, "source_id": record["source_id"], "source_hash": record["source_hash"],
+             "reference_id": record["reference_id"], "source_article": record["source_article"],
+             "record_sha256": record["record_sha256"], "canonical_path": record["canonical_path"],
+             "formal_write_count": 0}
+    if paragraph_id is not None:
+        paragraphs = record["paragraphs"]
+        positions = [i for i, paragraph in enumerate(paragraphs) if paragraph["paragraph_id"] == paragraph_id]
+        if unit_id is not None or len(positions) != 1:
+            raise ValidationError("select one exact paragraph of this reading source")
+        i = positions[0]
+        pin = {k: scope[k] for k in ("source_id", "source_hash", "record_sha256")}
+        more = i + 1 < len(paragraphs)
+        return {**scope, "paragraph": paragraphs[i], "paragraph_count": len(paragraphs),
+                "eof": not more, "full_read": pin,
+                "next_read": {**pin, "paragraph_id": paragraphs[i+1]["paragraph_id"]} if more else None}
     if unit_id is None:
         return record
     matches = [unit for unit in record["units"] if unit["unit_id"] == unit_id]
     if len(matches) != 1:
         raise ValidationError("reading preparation unit identity is missing or ambiguous")
-    return {"schema_version": SCHEMA, "source_id": source_id, "source_hash": record["source_hash"],
-            "source_article": record["source_article"], "unit": matches[0], "formal_write_count": 0}
+    return {**scope, "unit": matches[0]}
+
+
+def query_review(output: Path, *, repo_root: Path, source_id: str, question_id: str,
+                 unlocked_question: str, evidence_units: tuple[str, ...] = (),
+                 source_hash: str | None = None, record_sha256: str | None = None) -> dict[str, Any]:
+    """Return the indexed publisher analysis for one explicitly unlocked question."""
+    if not re.fullmatch(r"Q[1-9][0-9]*", question_id) or unlocked_question != f"{source_id}/{question_id}":
+        raise ValidationError("review requires the matching source and explicitly unlocked question")
+    article = query(output, source_id=source_id, repo_root=repo_root,
+                    source_hash=source_hash, record_sha256=record_sha256)
+    reference = article["reference_id"]
+    if not reference or not any(q["question_id"] == question_id for q in article["questions"]):
+        raise ValidationError("no indexed exam question at this source and question ID")
+    evidence = {}
+    if evidence_units:
+        sentences = {unit["unit_id"]: unit for unit in article["units"] if unit["kind"] == "article"}
+        if any(unit_id not in sentences for unit_id in evidence_units):
+            raise ValidationError("evidence must identify source sentences from this article")
+        evidence = {unit_id: sentences[unit_id] for unit_id in evidence_units}
+
+    protected = repo_root / "raw/protected/exam-reading-analysis"
+    index = load_json(protected / "index.json")
+    entries = [entry for entry in index["records"] if entry["reference_id"] == reference]
+    if len(entries) != 1 or entries[0]["status"] != "preprocessed_complete":
+        raise ValidationError("verified publisher analysis is unavailable for this source")
+    entry = entries[0]
+    path = (repo_root / entry["json_path"]).resolve()
+    if not path.is_relative_to(protected.resolve()):
+        raise ValidationError("invalid protected analysis path")
+    record = load_json(path)
+    if (record.get("reference_id") != reference or record.get("analysis_id") != entry["analysis_id"]
+            or record.get("visibility") != "hidden_until_review"
+            or record.get("extraction_status") != "preprocessed_complete"):
+        raise ValidationError("publisher analysis does not match the indexed exam source")
+    sources = load_json(repo_root / "raw/reference_sources/exam_pdf_manifest.json")["sources"]
+    publisher = [source for source in sources if source["year"] == record["year"]
+                 and source["role"] == "answer_analysis_hidden_source"]
+    if len(publisher) != 1 or publisher[0]["sha256"] != record.get("source_sha256"):
+        raise ValidationError("publisher analysis differs from the registered PDF")
+    number = int(question_id[1:])
+    matches = [item for item in record["questions"] if item["question_number"] == number]
+    if len(matches) != 1:
+        raise ValidationError("publisher analysis lacks an exact question block")
+    question = matches[0]
+    answer = question.get("correct_answer")
+    if (not str(question.get("verification_status", "")).startswith("source_verified")
+            or answer not in {"A", "B", "C", "D"} or record["answer_key"].get(str(number)) != answer
+            or not str(question.get("analysis_text", "")).strip()
+            or not question.get("analysis_source_pages")):
+        raise ValidationError("publisher answer or analysis lacks source verification")
+    result = {
+        "source_id": article["source_id"], "reference_id": reference, "question_id": question_id,
+        "source_hash": article["source_hash"], "record_sha256": article["record_sha256"],
+        "analysis_id": record["analysis_id"], "analysis_record_sha256": object_sha256(record),
+        "correct_answer": answer, "analysis_text": question["analysis_text"],
+        "analysis_path": entry["json_path"], "analysis_source_pages": question["analysis_source_pages"],
+        "answer_evidence_page": question["answer_evidence_page"], "source_sha256": record["source_sha256"],
+        "verification_status": question["verification_status"], "formal_write_count": 0,
+    }
+    if evidence:
+        result["source_sentences"] = evidence
+    return result

@@ -15,8 +15,9 @@ from typing import Any, Iterable
 from .constants import MASTER_HEADER, MASTERED_HEADER
 from .errors import IdempotencyConflict, ValidationError
 from .formal import read_csv
+from .packages import whole_article_unit_id
 from .review_status import effective_review_status, effective_mastered_norms, effective_mastered_ids, load_review_status_ledger
-from .util import canonical_bytes, file_sha256, normalize_item, object_sha256, parse_iso_date, utc_now, atomic_write_json
+from .util import canonical_bytes, file_sha256, learner_message_spans, normalize_item, object_sha256, parse_iso_date, utc_now, atomic_write_json, sentence_sha256
 
 
 EVENT_SCHEMA = "english_formal_learning_event_v1"
@@ -71,8 +72,18 @@ def load_learning_events(path: Path) -> list[dict[str, Any]]:
 
 
 def _validate_event_fields(event: Any) -> None:
-    if not isinstance(event, dict) or set(event) != EVENT_FIELDS:
+    from .writing_contract import SOURCE_PREFIX, observation_fields
+    writing = isinstance(event, dict) and str(event.get("source_id", "")).startswith(SOURCE_PREFIX)
+    from .writing_sessions import SOURCE as WRITING_SESSION_SOURCE
+    writing_session = isinstance(event, dict) and str(event.get("source_id", "")).startswith(WRITING_SESSION_SOURCE)
+    extension = {"writing_memory"} if writing_session else {"writing"} if writing else set()
+    if not isinstance(event, dict) or set(event) != EVENT_FIELDS | extension:
         raise ValidationError("learning_event_append requires the exact formal event fields")
+    if writing:
+        observation_fields(event)
+    if writing_session:
+        from .writing_personal import fields
+        fields(event)
     for key in ("event_key", "source_id", "unit_id", "observed_at"):
         if not isinstance(event[key], str) or not event[key].strip():
             raise ValidationError(f"formal learning event requires {key}")
@@ -104,13 +115,169 @@ def _validate_event_fields(event: Any) -> None:
         raise ValidationError("a real learning event cannot use proposal adjudication as an answer")
 
 
+def _whole_article_capture_unit_bound(event: dict[str, Any], package: dict[str, Any],
+                                      identity: dict[str, Any], resolved: list[dict[str, Any]]) -> bool:
+    """Bind a native whole-article Capture to its verified prepared members.
+
+    Unlike the older grouped-attachment route, native article Capture stores the
+    complete prepared text in source.json. Validate that exact binding before
+    accepting a sentence, paragraph, question or option identity. Actual learner
+    text remains required in this same package; article membership supplies no
+    independent-correct-use or answer-disclosure authority.
+    """
+    reference_id = whole_article_unit_id(identity)
+    if reference_id is None or identity.get("source_id") != event["source_id"]:
+        return False
+    pid = package["package_id"]
+    if not any(row["binding"]["package_id"] == pid
+               and row["binding"].get("resolved_role") == "user"
+               and isinstance(row["value"], dict)
+               and str(row["value"].get("content", "")).strip()
+               for row in resolved):
+        return False
+    try:
+        from .reading_preparation import query, DEFAULT_OUTPUT
+        root = Path(package["path"]).resolve()
+        repo = root.parents[3]  # native state/packages/YYYY-MM-DD/PACKAGE_ID
+        canonical = query(repo / DEFAULT_OUTPUT, source_id=event["source_id"], repo_root=repo)
+        if (canonical.get("reference_id") != reference_id
+                or canonical.get("source_hash") != identity["source_hash"]
+                or canonical.get("source_article") != identity.get("source_article")):
+            return False
+        units = canonical["units"]
+        full_text = "\n\n".join(unit["text"] for unit in units)
+        if (identity["source_sentence"] != full_text
+                or identity.get("sentence_sha256") != sentence_sha256(full_text)):
+            return False
+        unit_id = event["unit_id"]
+        if sum(unit.get("unit_id") == unit_id for unit in units) == 1:
+            return True
+        if sum(question.get("question_id") == unit_id
+               for question in canonical.get("questions", [])) == 1:
+            return True
+        paragraph = re.fullmatch(r"P(\d+)", unit_id)
+        return bool(paragraph and sum(
+            row.get("paragraph_id") == f"P{int(paragraph.group(1)):02d}"
+            for row in canonical.get("paragraphs", [])) == 1)
+    except (KeyError, IndexError, OSError, TypeError, ValueError, ValidationError):
+        return False
+
+
+def _grouped_capture_unit_bound(event: dict[str, Any], package: dict[str, Any],
+                                identity: dict[str, Any], resolved: list[dict[str, Any]]) -> bool:
+    """Accept an additional unit only with exact canonical source and user evidence.
+
+    A grouped Capture keeps one primary identity. Its complete, hash-checked
+    practice-safe article attachment may bind another real sentence/paragraph/question;
+    merely supplying a unit label or an unverified attachment is insufficient.
+    """
+    if identity.get('source_id') != event['source_id'] or not identity.get('source_hash'):
+        return False
+    root = Path(package['path']).resolve()
+    pid = package['package_id']
+    users = [str(row['value'].get('content', '')) for row in resolved
+             if row['binding']['package_id'] == pid and row['binding'].get('resolved_role') == 'user'
+             and isinstance(row['value'], dict)]
+    if not users:
+        return False
+    for row in resolved:
+        if (row['binding']['package_id'] != pid or row['binding'].get('kind') != 'other_attachment'
+                or not isinstance(row['value'], dict)):
+            continue
+        attachment = row['value']
+        if attachment.get('mime_type') != 'application/json':
+            continue
+        try:
+            target = (root / attachment['path']).resolve(strict=True)
+            target.relative_to(root)
+            if file_sha256(target) != attachment['sha256']:
+                continue
+            data = load_json_document(target)
+            from .reading_preparation import query, DEFAULT_OUTPUT
+            repo = root.parents[3]  # native state/packages/YYYY-MM-DD/PACKAGE_ID
+            canonical = query(repo / DEFAULT_OUTPUT, source_id=event['source_id'], repo_root=repo)
+            if (data != canonical or canonical['source_hash'] != identity['source_hash']
+                    or canonical['source_article'] != identity.get('source_article')):
+                continue
+            unit = next((u for u in canonical['units'] if u['unit_id'] == event['unit_id']), None)
+            if unit and unit['kind'] == 'article':
+                sentence = unit['text']
+                if any(sentence in text for text in users):
+                    return True
+                # A pasted source sentence can omit its final full stop before
+                # the learner's Chinese explanation. Preserve the raw message;
+                # tolerate only that punctuation, never changed words or a
+                # partial-word match against the canonical source.
+                if sentence.endswith('.') and sentence[:-1].strip():
+                    pattern = r'(?<![A-Za-z0-9_])' + re.escape(sentence[:-1]) + r'(?![A-Za-z0-9_])'
+                    if any(re.search(pattern, text) for text in users):
+                        return True
+            paragraph_match = re.fullmatch(r'P(\d+)', event['unit_id'])
+            if paragraph_match:
+                paragraph_id = f"P{int(paragraph_match.group(1)):02d}"
+                paragraphs = [p for p in canonical.get('paragraphs', [])
+                              if p['paragraph_id'] == paragraph_id]
+                if len(paragraphs) == 1 and any(
+                        u.get('kind') == 'article' and u.get('paragraph_id') == paragraph_id
+                        and u.get('text') and any(u['text'] in text for text in users)
+                        for u in canonical['units']):
+                    return True
+            question = next((q for q in canonical['questions'] if q['question_id'] == event['unit_id']), None)
+            if question:
+                number = str(question['number'])
+                marker = rf'(?<!\d)(?:Q\s*{number}\b|(?:第\s*)?{number}\s*题|{number}\s*[.．])'
+                if any(re.search(marker, text) for text in users):
+                    return True
+        except (KeyError, ValueError, OSError, ValidationError):
+            continue
+    return False
+
+
 def validate_learning_event(event: Any, resolved: list[dict[str, Any]], *, study_date: str,
                             package_documents: list[dict[str, Any]]) -> str:
     _validate_event_fields(event)
     if parse_iso_date(event["observed_at"]) != study_date and not (event["kind"] == "adjudication" and event["origin"] == "project-E"):
-        raise ValidationError("formal learning event must retain the original package study date")
-    user_text = [str(row["value"].get("content", "")) for row in resolved
-                 if row["binding"].get("resolved_role") == "user" and isinstance(row["value"], dict)]
+        # An immutable learning unit can span midnight. Its package date remains
+        # the unit's start date; each real observation must keep its own exact
+        # timestamp instead of being moved back to that start date. Resolved
+        # evidence has already passed package/node hash and role validation.
+        package_dates = {
+            row["package_id"]: load_json_document(Path(row["path"]) / "manifest.json").get("study_date")
+            for row in package_documents
+        }
+        dated_user_evidence = event["origin"] == "daily" and any(
+            row["binding"].get("resolved_role") == "user"
+            and package_dates.get(row["binding"].get("package_id")) == study_date
+            and isinstance(row["value"], dict)
+            and row["value"].get("created_at") == event["observed_at"]
+            and event["user_response"].strip()
+            and event["user_response"] in row["value"].get("content", "")
+            for row in resolved
+        )
+        if not dated_user_evidence:
+            raise ValidationError("formal learning event must retain the original package study date or an exact bound user timestamp")
+    frozen = {row["package_id"]: row for row in package_documents}
+    identities = {}
+    user_text = []
+    for row in resolved:
+        pid = row["binding"]["package_id"]
+        if pid not in identities:
+            identities[pid] = load_json_document(Path(frozen[pid]["path"]) / "source.json").get("identity", {})
+        if row["binding"].get("resolved_role") == "user":
+            source_text = identities[pid].get("source_sentence")
+            user_text.extend(learner_message_spans(row["value"], source_text if isinstance(source_text, str) else ""))
+    if "writing" in event:
+        from .writing_contract import validate_observation
+        validate_observation(event, resolved, frozen, identities)
+    verified_image_only = False
+    if "writing_memory" in event:
+        from .writing_personal import validate
+        writing = validate(event,resolved,frozen,identities)
+        submission = writing.get("submission", {})
+        verified_image_only = (not event["user_response"].strip()
+                               and submission.get("medium") in {"handwritten", "ocr", "mixed"}
+                               and submission.get("verification") == "checked_original"
+                               and bool(submission.get("attachment_sha256")))
     def text_values(value: Any) -> list[str]:
         if isinstance(value, str):
             return [value]
@@ -120,9 +287,9 @@ def validate_learning_event(event: Any, resolved: list[dict[str, Any]], *, study
             return [text for child in value for text in text_values(child)]
         return []
     evidence_text = [text for row in resolved for text in text_values(row["value"])]
-    if event["kind"] != "adjudication":
+    if event["kind"] != "adjudication" and not verified_image_only:
         if not event["user_response"].strip() or not any(event["user_response"] in text for text in user_text):
-            raise ValidationError("real learning backflow requires the verbatim user response in package evidence")
+            raise ValidationError("real learning backflow requires the verbatim user response outside quoted source material")
     for key in ("reasoning", "correction"):
         if event[key] and not any(event[key] in text for text in evidence_text):
             raise ValidationError(f"formal {key} is absent from the bound raw evidence")
@@ -133,19 +300,22 @@ def validate_learning_event(event: Any, resolved: list[dict[str, Any]], *, study
     if event["kind"] in {"answer", "review"} and event["outcome"] == "correct" and event["hint_dependence"] == "none" and event["reasoning_status"] == "valid":
         if not any(row["binding"]["kind"] == "independent_correct_use" for row in resolved):
             raise ValidationError("independent success requires exact independent_correct_use user evidence")
-    frozen = {row["package_id"]: row for row in package_documents}
     source_matches = False
     answer_safe = True
     web_matches = event["origin"] == "daily"
     actual_adjudication_time_matches = event["kind"] != "adjudication" or event["origin"] != "project-E"
     for row in resolved:
         package = frozen[row["binding"]["package_id"]]
-        identity = load_json_document(Path(package["path"]) / "source.json").get("identity", {})
+        identity = identities[package["package_id"]]
         if identity.get("answer_exposure") != "answer_free" or identity.get("source_kind") in {"question", "option", "explanation"}:
             answer_safe = False
         units = {identity.get(key) for key in ("sentence_id", "question_id", "paragraph_id", "knowledge_point_id")}
         if identity.get("source_id") == event["source_id"]:
-            if event["unit_id"] in units:
+            if (event["unit_id"] in units
+                    or (event["kind"] == "adjudication"
+                        and whole_article_unit_id(identity) == event["unit_id"])
+                    or _whole_article_capture_unit_bound(event, package, identity, resolved)
+                    or _grouped_capture_unit_bound(event, package, identity, resolved)):
                 source_matches = True
             provenance = identity.get("web_result", {})
             if isinstance(provenance, dict) and provenance == {
@@ -433,7 +603,7 @@ def query_learning_context(repo_root: Path, state_dir: Path, *, source_id: str |
         if not allow_protected and _ANSWER_LEAK_RE.search(json.dumps(row, ensure_ascii=False)):
             return {"status": "unavailable", "reason": "formal_record_protected", "subject": "english",
                     "formal_write_count": 0}
-        matching = [event for event in related if event["event"]["kind"] in {"answer", "review"}
+        matching = [event for event in related if not ({"writing","writing_memory"} & event["event"].keys()) and event["event"]["kind"] in {"answer", "review"}
                     and (key in event["event"]["bank_ids"] or "bank:" + key in event["event"]["concept_ids"])]
         state = "mastered" if normalize_item(row["item"]) in excluded or key in mastered_ids else "active"
         review = current_review.get(normalize_item(row["item"]))

@@ -4,17 +4,21 @@ from __future__ import annotations
 import importlib.util
 import json
 import re
+import sqlite3
 import sys
+from contextlib import closing
 from pathlib import Path
 from typing import Any, Callable
 
 from .constants import REPO_ROOT
 from .errors import ValidationError
+from .runtime_paths import bridge_root
 from .learning_state import formal_versions, invalidate_after_formal
 from .util import atomic_write_json, file_sha256, load_json, object_sha256
 
 
-PUBLISHER = Path("/Users/your-user/Documents/Study-Pro-Bridge/study_publication.py")
+PUBLISHER = bridge_root() / "study_publication.py"
+LOCAL_QUALITY_POLICY = "native_teaching_readback_v1"
 _PRIVATE_PARTS = {".git", ".obsidian", ".idea", "__pycache__", "node_modules", ".venv", "locks", "preimages", "staged", "transactions"}
 _PRIVATE_NAMES = {".DS_Store", ".env", "config.toml", "credentials.json", "id_rsa", "id_ed25519"}
 _PRIVATE_SUFFIXES = {".pyc", ".lock", ".sqlite", ".sqlite3", ".db", ".pem", ".key", ".p12", ".bak", ".backup"}
@@ -26,15 +30,26 @@ def _stamp(path: Path) -> tuple[int, int, int, int, int]:
 
 
 def _eligible(relative: Path) -> bool:
+    if (relative.parts[:2] in {("intake","writing-sessions"),("intake","writing-view")} or
+            relative.parts[:3]==("wiki","writing","每日作文摘要") or relative.as_posix()=="wiki/writing/个人作文学习摘要.md"):
+        return False
     if any(part in _PRIVATE_PARTS or part.startswith(".staging-") for part in relative.parts):
         return False
     if relative.name in _PRIVATE_NAMES or relative.name.startswith(".env.") or relative.suffix in _PRIVATE_SUFFIXES:
         return False
     if relative.parts[:2] in {("intake", "learning-context"), ("intake", "publication"), ("intake", "memory"),
-                             ("intake", "personal-summary"), ("wiki", "memory")}:
+                             ("intake", "personal-summary"), ("wiki", "memory"),
+                             ("intake", "memory-use"), ("intake", "sentence-teaching"),
+                             ("intake", "evening-feedback")}:
         # Full point memory (including its source refs and old versions) is a
         # local derived asset. It has no protected per-question Study Library
         # export contract; do not include it in the generic raw file manifest.
+        return False
+    # Day pages are local teaching material. Older, separately scoped review artifacts
+    # keep their existing publication behavior.
+    if (relative.parts[:2] == ("review", "personalized") and len(relative.parts) == 4
+            and relative.name == "index.html" and (relative.parts[2] == "history" or
+            re.fullmatch(r"\d{4}-\d{2}-\d{2}", relative.parts[2]))):
         return False
     # The semantic proposal is formal evidence. Rebuildable lookup generations,
     # objects and current pointers are not a substitute for that evidence.
@@ -46,6 +61,8 @@ def _eligible(relative: Path) -> bool:
 
 
 def _role(relative: Path) -> tuple[str, str]:
+    if relative.parts[:2] == ("wiki", "raw_archives"):
+        return "private_archive_locator", "protected"
     if relative.parts[0] == "bank":
         return "formal_learning_record", "protected"  # user evidence can contain answers
     if relative.parts[0] == "review":
@@ -71,6 +88,9 @@ def build_source_descriptors(repo_root: Path, *, include_pending: bool = False) 
     """
     repo = repo_root.resolve(strict=True)
     before = formal_versions(repo)
+    from .writing_publication import freeze_projection, summary_identity, verify_graph
+    if (repo / 'raw/reference_relations/writing-vocabulary-foundation/manifest.json').exists() or repo == REPO_ROOT.resolve():
+        verify_graph(repo)
     files: dict[str, dict[str, Any]] = {}
     stamps: dict[Path, tuple[int, int, int, int, int]] = {}
     gaps: list[dict[str, Any]] = []
@@ -91,6 +111,15 @@ def build_source_descriptors(repo_root: Path, *, include_pending: bool = False) 
         files[relative] = row
         return row
 
+    def private_writing_package(package):
+        identity_path = package / "source.json"
+        if not identity_path.is_file():
+            return False
+        identity = load_json(identity_path).get("identity", {})
+        return bool(identity.get("writing_session") or str(identity.get("source_id","")).startswith("WRCOURSE-"))
+
+    private_packages = {path.parent for path in (repo / "intake/packages").glob("*/*/source.json")
+                        if private_writing_package(path.parent)}
     for directory in ("articles", "bank", "review", "raw", "wiki", "intake", "deferred-intake"):
         root = repo / directory
         if not root.exists():
@@ -99,14 +128,20 @@ def build_source_descriptors(repo_root: Path, *, include_pending: bool = False) 
             if not path.is_file():
                 continue
             relative = path.relative_to(repo)
+            if any(parent in private_packages for parent in path.parents):
+                continue
             if not _eligible(relative):
-                exclusions.append({"path": relative.as_posix(), "reason": "machine_or_rebuildable_runtime_state"})
+                prefix = relative.parts[:2]
+                if prefix not in {("intake", "memory-use"), ("intake", "sentence-teaching")}:
+                    exclusions.append({"path": relative.as_posix(), "reason": "machine_or_rebuildable_runtime_state"})
                 continue
             role, visibility = _role(relative)
             if relative.parts[:2] == ("intake", "packages"):
                 role = "immutable_conversation_package"
             add(path, relative.as_posix(), role, visibility)
 
+    exclusions.extend({"path": folder, "reason": "local_only_personalized_derived_assets"}
+                      for folder in ("intake/memory-use", "intake/sentence-teaching"))
     originals: list[dict[str, Any]] = []
     manifests = [
         ("raw/reference_sources/exam_pdf_manifest.json", "sources", "external_path"),
@@ -169,12 +204,28 @@ def build_source_descriptors(repo_root: Path, *, include_pending: bool = False) 
             package_root = resolve_archived_package_from_pointer(repo / "intake", repo, package_id=package_id,
                                                                  study_date=pointer.parent.name)
             package_root.relative_to(volume["subject_root"])
+            if private_writing_package(package_root):
+                exclusions.append({"path": f"intake/packages/{pointer.parent.name}/{package_id}", "reason": "private_writing_original"})
+                continue
             for path in sorted(package_root.rglob("*")):
                 if path.is_file():
                     target = f"intake/packages/{pointer.parent.name}/{package_id}/{path.relative_to(package_root).as_posix()}"
                     add(path, target, "archived_immutable_conversation_package", "protected")
     if not (repo / "intake/packages").exists() and not pointers:
         gaps.append({"code": "no_current_complete_conversation_packages", "scope": "existing articles and legacy events preserved; historical full dialogue not synthesized"})
+    personal = None
+    bindings = []
+    state = repo / "intake"
+    if (state / "memory/current.json").is_file() or repo == REPO_ROOT.resolve():
+        personal, members = freeze_projection(state)
+        for name, path in members.items():
+            add(path, name, "bounded_teaching_projection", "answer_free")
+        for name in ("personal-summary/current.json", "memory/current.json", "memory/lifecycle.json"):
+            path = state / name
+            if path.is_file():
+                bindings.append(dict(source_path=str(path), bytes=path.stat().st_size, sha256=file_sha256(path)))
+        if summary_identity(state).get("version") != personal["version"]:
+            raise ValidationError("personal summary changed before descriptor completion")
     after = formal_versions(repo)
     if before != after or any(not path.exists() or _stamp(path) != stamp for path, stamp in stamps.items()):
         raise ValidationError("English publication sources changed during descriptor construction")
@@ -182,6 +233,8 @@ def build_source_descriptors(repo_root: Path, *, include_pending: bool = False) 
             "files": [files[key] for key in sorted(files)], "file_count": len(files),
             "local_version": object_sha256({"formal": after, "files": {key: files[key]["sha256"] for key in sorted(files)}}),
             "formal_version": object_sha256(after), "formal_source_hashes": after,
+            "additional_source_bindings": bindings,
+            **({"personalization": personal} if personal else {}),
             "source_lock": str(repo / "intake/locks/formal.lock"),
             "source_consistency": "hash_bound_and_restat; publisher verifies during copy",
             "entrypoints": ["articles", "bank/master_bank.csv", "bank/sentence_patterns.md", "review",
@@ -271,34 +324,149 @@ def _complete_snapshot_closeout(repo_root: Path, state_dir: Path, receipt: dict[
     return value
 
 
+def verify_native_readback(repo: Path, state: Path, formal_version: str,
+                           memory: dict[str, Any]) -> dict[str, Any]:
+    """Reopen the same guarded point view that local English teaching uses."""
+    from .memory_query import query_memory_context
+    from .memory_store import open_memory_projection
+    from .personal_summary import OBSERVATION_ORDER_AMBIGUOUS, key_hash
+
+    result = {"formal_version": formal_version, "points": {}, "memory_status": memory["status"]}
+    if memory["status"] == "ready" and memory.get("affected_keys"):
+        index_path = state / "personal-summary/current.json"
+        index_sha = file_sha256(index_path)
+        routes = load_json(index_path)["routes"]
+        db, manifest = open_memory_projection(state)
+        generation = manifest["generation"]
+        if manifest["summary_index_sha256"] != index_sha:
+            db.close()
+            raise ValidationError("native memory generation differs from current summary index")
+        with closing(db):
+            for key in sorted(set(memory["affected_keys"])):
+                row = db.execute("SELECT summary_sha256, answer_safe FROM points WHERE point_key=?", (key,)).fetchone()
+                expected = routes.get(key_hash(key), {}).get("sha256")
+                if not row or not expected or row["summary_sha256"] != expected:
+                    raise ValidationError("native memory summary identity mismatch:" + key)
+                output = query_memory_context(repo, state, keys=[key], view="teaching", max_bytes=16384)
+                if (output.get("generation") != generation or output.get("summary_index_sha256") != index_sha
+                        or not output.get("coverage", {}).get("projection_available")):
+                    raise ValidationError("native memory readback version mismatch:" + key)
+                matches = output.get("matched", [])
+                invalidation = {"key": key, "reason": "invalidated_summary_requires_refresh"}
+                if not matches and output.get("status") == "pending" and output.get("pending") == [invalidation]:
+                    visibility = "invalidated"
+                elif (row["answer_safe"] and not matches and output.get("status") == "unavailable"
+                      and any(item.get("key") == key and item.get("reason") == OBSERVATION_ORDER_AMBIGUOUS
+                              and len(item.get("episode_ids", [])) > 1 for item in output.get("unavailable", []))):
+                    visibility = OBSERVATION_ORDER_AMBIGUOUS
+                elif row["answer_safe"]:
+                    if (output.get("status") != "ready" or len(matches) != 1 or matches[0].get("key") != key
+                            or matches[0].get("summary_sha256") != expected
+                            or matches[0].get("visibility") != "answer_free"
+                            or not matches[0].get("latest_observation")):
+                        raise ValidationError("native teaching summary not available:" + key)
+                    visibility = "answer_free"
+                else:
+                    if matches or not any(item.get("key") == key and item.get("reason") == "protected"
+                                          for item in output.get("unavailable", [])):
+                        raise ValidationError("native teaching answer protection failed:" + key)
+                    visibility = "withheld"
+                result["points"][key] = {"summary_sha256": expected, "teaching_visibility": visibility,
+                                          "readback_sha256": object_sha256(output)}
+        current_db, current = open_memory_projection(state)
+        with closing(current_db):
+            if (current["generation"], file_sha256(index_path)) != (generation, index_sha):
+                raise ValidationError("native memory changed during readback")
+        result.update(memory_generation=generation, summary_index_sha256=index_sha)
+    if object_sha256(formal_versions(repo)) != formal_version:
+        raise ValidationError("formal version changed during native readback")
+    return result
+
+
+def local_quality_pending(state: Path, writer_receipt_path: Path) -> str | None:
+    """Check the local seal for a verified writer receipt, including legacy inputs."""
+    try:
+        receipt = load_json(writer_receipt_path)
+        if not isinstance(receipt, dict):
+            return "native_readback"
+        rid = str(receipt.get("receipt_id", ""))
+        if not re.fullmatch(r"EN-RECEIPT-[0-9A-F]{16}", rid):
+            return "native_readback"
+        path = state / "receipts/local-quality" / f"{rid}.json"
+        if not path.is_file() and receipt.get("local_quality_policy") is None:
+            return None
+        result = load_json(path)
+        if (not isinstance(result, dict) or result.get("schema_version") != "english_native_closeout_receipt_v1"
+                or result.get("writer_receipt_id") != rid
+                or result.get("writer_receipt_sha256") != object_sha256(receipt)):
+            return "native_readback"
+        return None if result.get("status") == "VERIFIED_CURRENT" else result.get("pending_component") or "native_readback"
+    except (OSError, ValueError, TypeError, KeyError):
+        return "native_readback"
+
+
 def complete_formal_closeout(repo_root: Path, state_dir: Path, receipt: dict[str, Any], *,
                              runner: Callable[..., dict[str, Any]] | None = None,
                              retry_publication: bool = False,
                              archive_basis_sha256: str | None = None) -> dict[str, Any]:
-    """Report both snapshot publication and the independently recoverable memory."""
+    """Seal the local readback and optionally request a separate replica."""
     from .memory_lifecycle import mark_formal_memory_pending, recover_memory_closeout
+    rid = str(receipt.get("receipt_id", ""))
+    if (receipt.get("mode") != "apply" or receipt.get("status") not in {"APPLIED", "PARTIAL", "NO_ACTION"}
+            or not re.fullmatch(r"EN-RECEIPT-[0-9A-F]{16}", rid)):
+        raise ValidationError("local verification requires a successful formal closeout")
+    if archive_basis_sha256 is not None and not re.fullmatch(r"[0-9a-f]{64}", archive_basis_sha256):
+        raise ValidationError("archive closeout basis must be a SHA-256")
     try:
         memory = mark_formal_memory_pending(repo_root, state_dir, receipt)
+        from .writing_author import applies, automatic_profile
+        if applies(state_dir,receipt) and memory.get("pending_component")!="memory_index":
+            memory=automatic_profile(repo_root,state_dir,receipt)
         if memory.get("pending_component") == "memory_index":
             memory = recover_memory_closeout(repo_root, state_dir, receipt["receipt_id"])
     except (OSError, ValueError, ValidationError) as exc:
         memory = {"status": "pending", "pending_component": "personal_summary",
                   "error_type": type(exc).__name__, "formal_write_count": 0}
-    value = _complete_snapshot_closeout(repo_root, state_dir, receipt, runner=runner,
-        retry_publication=retry_publication, archive_basis_sha256=archive_basis_sha256,
-        memory_generation=memory.get("memory_generation") if memory.get("status") == "ready" else None)
-    if memory.get("status") in {"NOT_ENABLED", "LEGACY_NOT_REQUIRED"}:
-        return value
-    snapshot_status = value.get("snapshot_status") or value.get("status")
-    value = {**value, "snapshot_status": snapshot_status, "memory": memory,
-             "formal_apply_invocation_count": 0}
-    if memory.get("status") != "ready":
-        value.update(status="FORMAL_COMMITTED_MEMORY_PENDING", pending_component=memory.get("pending_component", "personal_summary"))
-    elif snapshot_status == "PUBLISHED":
-        value.update(status="PUBLISHED", pending_component=None)
-    if value.get("event_id"):
-        try:
-            atomic_write_json(state_dir / "publication" / f"{value['event_id']}.json", value)
-        except OSError as exc:
-            value["receipt_write_error"] = type(exc).__name__
-    return value
+    from .sentence_visuals import stage_status
+    teaching = stage_status(state_dir, rid)
+    local = {"schema_version": "english_native_closeout_receipt_v1", "writer_receipt_id": rid,
+             "writer_receipt_sha256": object_sha256(receipt), "archive_basis_sha256": archive_basis_sha256,
+             "formal_apply_invocation_count": 0, "memory": memory}
+    if teaching:
+        local["sentence_teaching"] = teaching
+    component = "local_context"
+    try:
+        if any(row.get("writing_contract")=="english-read-write/1" for row in receipt.get("action_results", [])):
+            component = "writing_view"
+            from .writing_workspace import rebuild
+            local["writing_view"] = rebuild(repo_root, state_dir, receipt)
+            component = "local_context"
+        version = invalidate_after_formal(repo_root, state_dir, event_id=rid)["formal_version"]
+        local["formal_version"] = version
+        component = "native_readback"
+        if memory.get("status") in {"ready", "LEGACY_NOT_REQUIRED", "NOT_ENABLED"}:
+            local["native_teaching_readback"] = verify_native_readback(repo_root, state_dir, version, memory)
+            local.update(status="VERIFIED_CURRENT", verification_basis="native_teaching_readback", pending_component=None)
+        else:
+            local.update(status="FORMAL_COMMITTED_MEMORY_PENDING",
+                         pending_component=memory.get("pending_component", "personal_summary"))
+    except (OSError, ValueError, KeyError, sqlite3.Error, ValidationError) as exc:
+        local.update(status="FORMAL_COMMITTED_CONTEXT_PENDING", pending_component=component,
+                     reason=str(exc))
+    try:
+        atomic_write_json(state_dir / "receipts/local-quality" / f"{rid}.json", local)
+    except OSError as exc:
+        local.update(status="FORMAL_COMMITTED_CONTEXT_PENDING", pending_component="quality_receipt", reason=type(exc).__name__)
+    if runner is not None or retry_publication:
+        delivery = _complete_snapshot_closeout(repo_root, state_dir, receipt, runner=runner,
+            retry_publication=retry_publication, archive_basis_sha256=archive_basis_sha256,
+            memory_generation=memory.get("memory_generation") if memory.get("status") == "ready" else None)
+        if memory.get("status") not in {"NOT_ENABLED", "LEGACY_NOT_REQUIRED"}:
+            delivery = {**delivery, "snapshot_status": delivery.get("snapshot_status") or delivery.get("status")}
+            if memory.get("status") != "ready":
+                delivery.update(status="FORMAL_COMMITTED_MEMORY_PENDING", pending_component=memory.get("pending_component"))
+    else:
+        delivery = {"status": "NOT_REQUESTED", "reason": "explicit_publication_required"}
+    from .evening_feedback import after_formal
+    return {**delivery, "memory": memory, "local_quality": local, "evening_feedback": after_formal(repo_root,state_dir,receipt,local),
+            "formal_apply_invocation_count": 0}

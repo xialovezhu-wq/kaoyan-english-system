@@ -569,6 +569,12 @@ def load_graph_runtime(
             {},
             {},
         )
+    from english_pipeline.writing_publication import verify_graph
+    from english_pipeline.errors import ValidationError
+    try:
+        verify_graph(root)
+    except (OSError, ValueError, ValidationError) as exc:
+        return {"status": "stale_or_invalid", "path": str(graph_dir.relative_to(root)), "reason": str(exc)}, {}, {}
     public = {
         "status": "loaded",
         "path": str(graph_dir.relative_to(root)),

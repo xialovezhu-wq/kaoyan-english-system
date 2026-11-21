@@ -41,6 +41,8 @@ from .writer import (
 )
 from .sentence_support import (
     preflight_sentence_support,
+    support_preflight_receipt_path,
+    validate_sentence_support_preflight,
     refresh_sentence_support,
     sentence_support_required,
     support_receipt_path,
@@ -1207,8 +1209,11 @@ def _trusted_consumed_pointer(
     except (OSError, ValueError, json.JSONDecodeError, ValidationError):
         return None
     from .memory_lifecycle import memory_closeout_status
+    from .publication import local_quality_pending
     if any(memory_closeout_status(state_root, row["receipt_id"]).get("status") == "pending"
            for row in completed_closeouts):
+        return None
+    if any(local_quality_pending(state_root, Path(row["receipt_path"])) for row in completed_closeouts):
         return None
     return {
         "pointer_path": str(pointer_path),
@@ -1292,6 +1297,10 @@ def _pending_component_for_closeout(
     batch_id = str(closeout.get("batch_id") or "")
     manifest_path = Path(str(closeout.get("manifest_path") or ""))
     writer_receipt_path = Path(str(closeout.get("receipt_path") or ""))
+    from .publication import local_quality_pending
+    native_pending = local_quality_pending(state_root, writer_receipt_path)
+    if native_pending:
+        return native_pending
     try:
         support_required = sentence_support_required(load_json(manifest_path))
     except (OSError, ValueError, json.JSONDecodeError, ValidationError):
@@ -1337,10 +1346,12 @@ def _pending_component_for_closeout(
     return "cleanup"
 
 
-def _all_local_package_rows(state_dir: Path) -> list[dict[str, Any]]:
+def _all_local_package_rows(state_dir: Path, wanted: set[str] | None = None) -> list[dict[str, Any]]:
     open_transactions = _open_transactions_by_package(state_dir)
     rows: list[dict[str, Any]] = []
     for root in sorted((state_dir / "packages").glob("*/*")):
+        if wanted and root.name not in wanted:
+            continue
         if not root.is_dir() or not root.name.startswith(_PACKAGE_ID_PREFIX):
             continue
         rows.append(_local_package_record(state_dir, root, open_transactions))
@@ -1351,6 +1362,7 @@ def _postformal_support_debt_rows(
     state_dir: Path,
     *,
     existing_ids: set[str],
+    wanted: set[str] | None = None,
 ) -> list[dict[str, Any]]:
     """Discover committed support debt even when no local package is enumerable.
 
@@ -1375,6 +1387,8 @@ def _postformal_support_debt_rows(
             if not isinstance(package_record, dict):
                 continue
             package_id = str(package_record.get("package_id", ""))
+            if wanted and package_id not in wanted:
+                continue
             package_sha = str(package_record.get("package_sha256", ""))
             if package_id in existing_ids or not package_id or not _SHA256_RE.fullmatch(package_sha):
                 continue
@@ -1457,7 +1471,7 @@ def _subset_consumed_rows(
     return rows
 
 
-def _postformal_memory_debt_rows(state_dir: Path, *, existing_ids: set[str]) -> list[dict[str, Any]]:
+def _postformal_memory_debt_rows(state_dir: Path, *, existing_ids: set[str], wanted: set[str] | None = None) -> list[dict[str, Any]]:
     """Expose newly registered memory debt even after a prior archive completed."""
     from .memory_lifecycle import memory_enabled, read_lifecycle
     if not memory_enabled(state_dir):
@@ -1468,6 +1482,8 @@ def _postformal_memory_debt_rows(state_dir: Path, *, existing_ids: set[str]) -> 
             continue
         binding = row["binding"]
         for pid, digest in binding.get("completed_packages", {}).items():
+            if wanted and pid not in wanted:
+                continue
             if pid in existing_ids:
                 continue
             match = re.fullmatch(r"EN-PKG-(\d{8})-[A-F0-9]{16}", pid)
@@ -1494,11 +1510,14 @@ def build_backlog_plan(
     persist: bool = True,
     output: Path | None = None,
     local_review_id: str | None = None,
+    local_authoring: bool = False,
 ) -> tuple[Path | None, dict[str, Any]]:
     del repo_root  # Reserved for future formal-snapshot bindings; planning is read-only.
     state_root = state_dir.resolve()
     cutoff = _validate_date(cutoff_date or shanghai_current_date())
     subset = set(package_ids or [])
+    if local_review_id and local_authoring:
+        raise ValidationError("cannot combine a new local worklist and an existing review ID")
     if local_review_id:
         from .local_review import local_authorization
         allowed = local_authorization(state_root, local_review_id)
@@ -1506,15 +1525,16 @@ def build_backlog_plan(
             raise ValidationError("native local backlog plan requires its exact authorized package set")
     if any(_PACKAGE_ID_RE.fullmatch(item) is None for item in subset):
         raise ValidationError("package subset contains an invalid English package id")
-    all_rows = _all_local_package_rows(state_root)
+    all_rows = _all_local_package_rows(state_root, subset)
     all_rows.extend(
         _postformal_support_debt_rows(
             state_root,
             existing_ids={row["package_id"] for row in all_rows},
+            wanted=subset,
         )
     )
     all_rows.extend(_postformal_memory_debt_rows(state_root,
-        existing_ids={row["package_id"] for row in all_rows}))
+        existing_ids={row["package_id"] for row in all_rows},wanted=subset))
     future_excluded = [
         {"package_id": row["package_id"], "study_date": row["study_date"]}
         for row in all_rows
@@ -1560,7 +1580,14 @@ def build_backlog_plan(
                 }
             )
     rows.sort(key=lambda row: (row["study_date"], row["package_id"]))
-    if local_review_id:
+    if local_authoring and any(row["status"] in {"pending", "waiting_web_review"} for row in rows):
+        from .local_review import local_worklist
+        worklist = local_worklist(state_root, rows, cutoff, persist=persist)
+        local_review_id = worklist["local_review_id"]
+        rows = [{**row, "status": "pending", "reason": "fixed_native_local_authoring",
+                 "local_review_id": local_review_id}
+                if row["status"] in {"pending", "waiting_web_review"} else row for row in rows]
+    elif local_review_id:
         from .local_review import local_pending_record
         rows = [local_pending_record(state_root, row, local_review_id) for row in rows]
     selected = [
@@ -1770,6 +1797,8 @@ def _ensure_support_refresh(
             writer_receipt_path=writer_receipt_path,
             receipt_path=receipt_path,
         )
+        from .sentence_visuals import refresh_after_support
+        refresh_after_support(repo, state_root, writer_receipt)
         return receipt_path, receipt
     preflight_path = Path(str(writer_receipt.get("support_preflight_receipt_path") or ""))
     if (preflight_path.is_symlink() or not preflight_path.is_file()
@@ -1926,6 +1955,8 @@ def execute_backlog_plan(
                         contract=archive_contract,
                     )
                     result["archive_status"] = archive_receipt["status"]
+                    result["local_quality"] = archive_receipt.get("local_quality")
+                    result["evening_feedback"] = archive_receipt.get("publication",{}).get("evening_feedback")
                 except Exception as exc:
                     result["errors"].append(f"archive_failed:{type(exc).__name__}:{exc}")
         pending_ids: set[str] = set()
@@ -1995,13 +2026,20 @@ def execute_backlog_plan(
                 from .publication import complete_formal_closeout
                 complete_formal_closeout(repo, state_root, writer_receipt)
             else:
-                dry_path, dry_receipt = apply_nightly(
-                    state_root,
-                    repo,
-                    manifest_path=manifest_path,
-                    actions_path=actions_path,
-                    apply=False,
-                )
+                prior_preflight = support_preflight_receipt_path(state_root, study_date, manifest["batch_id"])
+                if manifest.get("local_review_id") and prior_preflight.exists():
+                    # A local author can resume after a completed preflight. A new
+                    # dry run would produce different timestamped evidence.
+                    proof, _ = validate_sentence_support_preflight(
+                        state_root, manifest_path=manifest_path, actions_path=actions_path,
+                        receipt_path=prior_preflight)
+                    dry_path = Path(proof["dry_run_receipt_path"])
+                    dry_receipt = load_json(dry_path)
+                else:
+                    dry_path, dry_receipt = apply_nightly(
+                        state_root, repo, manifest_path=manifest_path, actions_path=actions_path,
+                        apply=False,
+                    )
                 if dry_receipt["status"] == "CAS_CONFLICT":
                     result["errors"].append("dry_run_cas_conflict")
                     day_results.append(result)
@@ -2111,6 +2149,8 @@ def execute_backlog_plan(
                     contract=archive_contract,
                 )
                 result["archive_status"] = archive_receipt["status"]
+                result["local_quality"] = archive_receipt.get("local_quality")
+                result["evening_feedback"] = archive_receipt.get("publication",{}).get("evening_feedback")
             except Exception as exc:
                 result["errors"].append(f"archive_failed:{type(exc).__name__}:{exc}")
         day_results.append(result)

@@ -14,6 +14,7 @@ from .packages import (
     validate_canonical_writer_closeout,
     validate_conversation_package,
     validate_evidence_refs,
+    whole_article_unit_id,
 )
 from .util import (
     atomic_write_bytes,
@@ -242,6 +243,17 @@ def _source_identity_from_package(package_root: Path) -> dict[str, Any]:
         raise ValidationError("conversation package source identity is invalid")
     source_id = str(identity.get("source_id") or "").strip()
     source_hash = str(identity.get("source_hash") or "").strip()
+    unbound_user_text = (
+        not source_id and not source_hash
+        and identity.get("source_kind") == "user_provided"
+        and isinstance(identity.get("source_sentence"), str)
+        and bool(identity["source_sentence"].strip())
+    )
+    if unbound_user_text:
+        # Retain a private, package-local locator, never invent an article binding.
+        # An explicitly verified web source correction owns any canonical binding.
+        source_id = package["package_id"]
+        source_hash = sentence_sha256(identity["source_sentence"])
     if not source_id or not _SHA256_RE.fullmatch(source_hash):
         raise ValidationError("sentence-support requires source_id and source_hash")
     sentence_id = identity.get("sentence_id")
@@ -252,7 +264,8 @@ def _source_identity_from_package(package_root: Path) -> dict[str, Any]:
     raw_source_kind = identity.get("source_kind")
     source_kind = (
         str(raw_source_kind)
-        if raw_source_kind in _SAFE_SOURCE_KINDS | _PROTECTED_SOURCE_KINDS
+        if isinstance(raw_source_kind, str)
+        and raw_source_kind in _SAFE_SOURCE_KINDS | _PROTECTED_SOURCE_KINDS
         else "unknown"
     )
     answer_exposure = (
@@ -260,6 +273,8 @@ def _source_identity_from_package(package_root: Path) -> dict[str, Any]:
         if identity.get("answer_exposure") in {"answer_free", "protected"}
         else "unknown"
     )
+    if unbound_user_text:
+        answer_exposure = "protected"
     segment_candidates = [
         ("sentence", sentence_id),
         ("paragraph", paragraph_id),
@@ -270,6 +285,9 @@ def _source_identity_from_package(package_root: Path) -> dict[str, Any]:
         ((kind, str(raw).strip()) for kind, raw in segment_candidates if isinstance(raw, str) and raw.strip()),
         None,
     )
+    article_unit = whole_article_unit_id(identity)
+    if segment is None and article_unit is not None:
+        segment = ("article", article_unit)
     if segment is None:
         raise ValidationError("sentence-support package lacks an exact segment identity")
     if segment[0] == "sentence" and (
@@ -593,6 +611,47 @@ def _writer_package_closure(
     }
 
 
+def _action_closures_reference(
+    episode: dict[str, Any], closures: list[dict[str, Any]]
+) -> dict[str, Any]:
+    return {
+        "count": len(closures),
+        "sha256": object_sha256(closures),
+        "writer_receipt_path": (
+            Path("receipts/nightly") / episode["study_date"]
+            / f"{episode['writer_receipt_id']}.json"
+        ).as_posix(),
+        "reconstruction": "writer_package_closure_v1",
+    }
+
+
+def _compact_protected_action_closures(record: dict[str, Any]) -> dict[str, Any]:
+    """Keep large protected locators bounded; full actions stay in the writer receipt."""
+    if record.get("record_kind") != "protected_sidecar":
+        return record
+    episode = record["latest_episode"]
+    closures = episode.get("action_closures")
+    # Both callers replace the receipt hash after construction. Reserve its exact
+    # final width here so preflight and refresh make the same size decision.
+    projected = {**record, "latest_episode": {**episode, "writer_receipt_sha256": "0" * 64}}
+    if not isinstance(closures, list) or len(_content_bytes(projected)) <= MAX_RECORD_BYTES:
+        return record
+    compact_episode = {key: value for key, value in episode.items() if key != "action_closures"}
+    compact_episode["action_closures_reference"] = _action_closures_reference(episode, closures)
+    return {**record, "latest_episode": compact_episode}
+
+
+def _validate_action_closures_reference(record: dict[str, Any], writer: dict[str, Any]) -> None:
+    episode = record.get("latest_episode", {})
+    if "action_closures_reference" not in episode:
+        return
+    closures = _writer_package_closure(writer, episode.get("package_id"))["action_closures"]
+    if (record.get("record_kind") != "protected_sidecar"
+            or "action_closures" in episode
+            or episode["action_closures_reference"] != _action_closures_reference(episode, closures)):
+        raise ValidationError("sentence-support action closure reference differs from writer receipt")
+
+
 def _merge_unique(previous: Iterable[Any], current: Iterable[Any], maximum: int) -> list[Any]:
     result: list[Any] = []
     fingerprints: set[str] = set()
@@ -667,7 +726,8 @@ def _validate_proposal(
         for correction in reviewed.get("corrections", []):
             corrected = by_id.get(correction["package_id"])
             original = by_id.get(correction["original_package_id"])
-            if corrected and original and corrected["package_sha256"] == correction["package_sha256"]:
+            if (corrected and original and corrected["package_sha256"] == correction["package_sha256"]
+                    and not correction.get("additional_unit")):
                 superseded_sources.add(correction["original_package_id"])
     if writer_receipt is not None:
         dispositions = writer_receipt.get("package_dispositions", {})
@@ -710,15 +770,12 @@ def _validate_proposal(
     for ordinal, raw in enumerate(proposal["records"], start=1):
         if not isinstance(raw, dict):
             raise ValidationError(f"sentence-support record proposal {ordinal} is invalid")
-        _required_exact(
-            raw,
-            {
-                "package_id", "package_sha256", "record_kind", "source_identity",
-                "evidence_refs", "paragraph_context", "history_episodes",
-                "teaching_cues", "vocabulary_candidates",
-            },
-            f"sentence-support record proposal {ordinal}",
-        )
+        required_fields = {
+            "package_id", "package_sha256", "record_kind", "source_identity",
+            "evidence_refs", "paragraph_context", "history_episodes", "teaching_cues", "vocabulary_candidates",
+        }
+        if not required_fields <= raw.keys() <= required_fields | {"display_review"}:
+            raise ValidationError(f"sentence-support record proposal {ordinal} fields do not match schema")
         package_id = raw["package_id"]
         if package_id in deferred_artifacts:
             continue
@@ -797,10 +854,19 @@ def _validate_proposal(
             sort_keys=True,
         )
         if _ANSWER_LEAK_RE.search(answer_surface) or contains_answer_signal(
-                [source.get("source_sentence"), paragraph_context, history, cues, vocabulary]):
+                [source.get("source_sentence")] if record_kind == "sentence" else []):
             raise ValidationError("sentence-support proposal contains an explicit exam answer leak")
+        if contains_answer_signal([paragraph_context, history, cues, vocabulary]):
+            raise ValidationError("sentence-support proposal contains an explicit exam answer leak")
+        reviewed = {}
+        if "display_review" in raw:
+            if record_kind != "sentence":
+                raise ValidationError("a protected support record cannot include a sentence display review")
+            from .sentence_review import bind_review
+            reviewed["display_review"] = bind_review(source["source_sentence"], raw["display_review"], bindings)
         validated.append(
             {
+                **reviewed,
                 "package_id": package_id,
                 "package_sha256": raw["package_sha256"],
                 "record_kind": record_kind,
@@ -1159,7 +1225,7 @@ def _new_record(
         if same_source and previous_record is not None
         else None
     )
-    return {
+    record = {
         "schema_version": RECORD_SCHEMA_VERSION,
         "status": "ready" if proposal_row["record_kind"] == "sentence" else "protected_sidecar",
         "answer_safe": proposal_row["record_kind"] == "sentence",
@@ -1195,6 +1261,9 @@ def _new_record(
         "formal_write_count": 0,
         "background_processing": "none",
     }
+    if "display_review" in proposal_row:
+        record["display_review"] = proposal_row["display_review"]
+    return _compact_protected_action_closures(record)
 
 
 def _receipt_core(receipt: dict[str, Any]) -> dict[str, Any]:
@@ -1529,7 +1598,23 @@ def refresh_sentence_support(
     writer_receipt_path: Path,
     proposal_path: Path,
 ) -> tuple[Path, dict[str, Any]]:
-    del repo_root  # The refresh consumes only frozen package and writer evidence.
+    path, receipt = _refresh_sentence_support(
+        state_dir, manifest_path=manifest_path, writer_receipt_path=writer_receipt_path,
+        proposal_path=proposal_path,
+    )
+    # The support receipt is durable before touching the rebuildable views.
+    from .sentence_visuals import refresh_after_support
+    refresh_after_support(repo_root, state_dir, load_json(writer_receipt_path))
+    return path, receipt
+
+
+def _refresh_sentence_support(
+    state_dir: Path,
+    *,
+    manifest_path: Path,
+    writer_receipt_path: Path,
+    proposal_path: Path,
+) -> tuple[Path, dict[str, Any]]:
     state_root = state_dir.resolve()
     manifest_path = manifest_path.resolve(strict=True)
     writer_receipt_path = writer_receipt_path.resolve(strict=True)
@@ -2122,6 +2207,7 @@ def validate_sentence_support_refresh(
             )
         ):
             raise ValidationError("sentence-support closed record binding mismatch")
+        _validate_action_closures_reference(record, writer)
         _, published_record = _read_content_object(
             state_root,
             closure["published_record_path"],
@@ -2277,6 +2363,7 @@ def _project_query_record(record: dict[str, Any]) -> dict[str, Any]:
             "terminal_outcomes",
             "formal_refs",
             "action_closures",
+            "action_closures_reference",
         )
         if key in latest
     }
@@ -2505,4 +2592,6 @@ def query_sentence_support(
     }
     if len(_content_bytes(result)) > max_bytes:
         return _query_failure("oversize", **identity)
+    if current_index_sha256(state_root) != index_sha:
+        return _query_failure("stale", **identity)
     return result
