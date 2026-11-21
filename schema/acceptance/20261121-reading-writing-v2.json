@@ -1,6 +1,6 @@
 {
   "task_id": "EN-READING-WRITING-V2-20261121",
-  "completed_at_asia_shanghai": "2026-11-21T09:50:38+08:00",
+  "completed_at_asia_shanghai": "2026-11-21T09:52:09+08:00",
   "overall_status": "local_verified; independent_web_and_personal_trial_pending",
   "source_baseline": {
     "english_review_commit": "4809ca08ce97a9ed4c3e2f5f4143973439188cdd",
@@ -183,26 +183,38 @@
     {
       "repository": "xialovezhu-wq/kaoyan-english-system",
       "remote_ref": "refs/heads/review/20261121-english-reading-writing-v2",
-      "remote_commit_sha": null,
+      "remote_commit_sha": "84115887c4bc9283f79fb60576fdf4bdabff3219",
       "review_doc_path": "schema/acceptance/20261121-reading-writing-v2.json",
       "code_and_snapshot_mapping": {
         "snapshot": "a2b4727a865a787eed3eb16c4977df7c918c372e",
         "private_code_commit": "3a07c7e9fe640e8a32c9d8deada313c34a83f4b9"
       },
-      "private_data_scan_status": "see independent pre-push all-reachable full-tree scan in terminal receipt",
-      "push_status": "pre_push"
+      "private_data_scan_status": "PASS",
+      "push_status": "remote_ref_and_fixed_files_verified",
+      "remote_files": {
+        "schema/acceptance/20261121-reading-writing-v2.json": "243e0911f93eef5b005e3300c93dc10575d32ce792645c19d6a21a41e40cb3f5",
+        "english_pipeline/reading_writing_tasks.py": "c33763b247efb322a4b7dfa167e75318058da37315949afde742bc5ed56ec800",
+        "english_pipeline/writing_practice.py": "44cca5f7bb8a44371d7dcb005e533f73af1aec136f259e43fcc9673f4a696f42",
+        "tests/english_pipeline/test_short_writing_round.py": "374f62abe5acd4d100eb3cb5db1878be431b04ffb8cc6bdb27b59f5c397dddc7"
+      }
     },
     {
       "repository": "xialovezhu-wq/study-pro-bridge",
       "remote_ref": "refs/heads/review/20261121-english-reading-writing-v2",
-      "remote_commit_sha": null,
+      "remote_commit_sha": "9c10e295eb79e662613a2c58782d3df46eb3701d",
       "review_doc_path": "schema/acceptance/20261121-reading-writing-v2.json",
       "code_and_snapshot_mapping": {
         "snapshot": "a2b4727a865a787eed3eb16c4977df7c918c372e",
         "private_code_commit": "d0e69c0de64fe705139487b0ab9c06846b15c58b"
       },
-      "private_data_scan_status": "see independent pre-push all-reachable full-tree scan in terminal receipt",
-      "push_status": "pre_push"
+      "private_data_scan_status": "PASS",
+      "push_status": "remote_ref_and_fixed_files_verified",
+      "remote_files": {
+        "schema/acceptance/20261121-reading-writing-v2.json": "243e0911f93eef5b005e3300c93dc10575d32ce792645c19d6a21a41e40cb3f5",
+        "study_mcp.py": "0f4d1bba2c4a6095bcab19ffd56c87a9cfa183f830de7bd846810908a359c238",
+        "study_personalization.py": "a94a812e68b53fd4f9cdd088815c5b110ea27cb0cab8987b2ea6aa8610764e15",
+        "tests/test_english_writing_publication_v2.py": "531bb79fbd273d6043445962bd2d001e7c2bac85d14b4386ab9d80fd1405110e"
+      }
     }
   ],
   "acceptance": {
@@ -304,7 +316,7 @@
       },
       {
         "id": "A20",
-        "status": "pending",
+        "status": "pass",
         "evidence": "发布后从远端读取分支头、关键代码和脱敏回执并比对 Git blob。"
       },
       {
@@ -625,5 +637,12 @@
       "eligibility_pending_count": 0,
       "eligibility_pending_reasons": []
     }
-  }
+  },
+  "verification_runs": {
+    "english_native": "25 unit and round cases, including the separately executed additional variants case",
+    "bridge_native": "57 read/guard tests and 12 local snapshot/freshness cases",
+    "isolated_real_transport": "one V2 writing fixture published through the native publisher and read via a separate stdio service",
+    "public_review_scope": "English source and V1 native dependencies are supplied without study material. Bridge public mirror keeps its existing public tool inventory; private service retains its installed tools."
+  },
+  "receipt_basis": "Verified code-commit references; the later receipt-only commit has its own remote SHA in the local terminal receipt."
 }
