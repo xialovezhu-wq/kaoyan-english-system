@@ -93,7 +93,7 @@ def from_capture(root, message, review_surfaces=None):
                     and ev.get("question_id") and ev.get("original_session") in (identity["session_id"],"WRITING-"+object_sha256(identity["session_id"])[:24])),None)
         if not bound:return None
         from .lesson_point_memory import control_proof
-        t=m["task"];point=control_proof(t,m,bound,message)
+        t=m["task"];point=control_proof(t,m,bound,message,origin["display_attempt_id"])
         return dict(activity="writing",task_type=t["task_type"],task_id=t["task_id"],task_version=t["task_version"],rubric_version=t["rubric_version"],
                     target_skill_id=t["target_skill_id"],task_cue=t["task_cue"],answer_support="unknown",task_relation="same_task",production_origin="unknown",
                     target_result="not_applicable",eligibility="ineligible",open_task_transfer_observed=False,task_sha256=object_sha256(t),

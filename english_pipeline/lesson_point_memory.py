@@ -44,7 +44,7 @@ def frozen_proof(m,draft,review):
            remaining=decision["unresolved"],medium=draft["medium"],verification=draft["verification"],response_kind=point["target_kind"],shareable=not bool((task.get("source_ref") or {}).get("question_id")),updated_at=at))
 
 
-def control_proof(task,m,event,message):
+def control_proof(task,m,event,message,display_attempt_id):
     """A control is original evidence of intent, never evidence of a correct or failed answer."""
     p=task["course_point"]
     ctrl=next((r for r in m["guided"]["control_events"] if r["id"]==event["id"]),None)
@@ -52,7 +52,7 @@ def control_proof(task,m,event,message):
     earlier=[d for d in m["guided"]["decisions"] if d["at"]<ctrl["at"]]
     last=earlier[-1] if earlier else {}
     return validate(dict(schema=SCHEMA,lesson_id=p["lesson_id"],lesson_point_id=p["lesson_point_id"],point_version=p["version"],
-                rubric_version=task["rubric_version"],practice_ref=object_sha256(m["guided"]["practice_id"]),question_id=event["question_id"],
+                rubric_version=task["rubric_version"],practice_ref=object_sha256(display_attempt_id),question_id=event["question_id"],
                 decision_ref=object_sha256(ctrl),response_sha256=event["original_sha256"],source_ref=object_sha256(p["source"]),
                 action=ctrl["kind"],classroom_status=ctrl["status"],criteria={k:v["status"] for k,v in last.get("criteria",{}).items()},
                 remaining=last.get("unresolved",[]),medium=event["original_medium"],verification="as_submitted",
