@@ -35,8 +35,8 @@ function draw(s) {
     el("cite").textContent = s.inventory.map(i => i.name + " · " + i.pages + " 页").join("\n");
   } else if (s.source) {
     const pos = s.video ? (s.video.start_seconds == null ? "本节视频" : "视频 " + s.video.start_seconds + " 秒") : "PDF 跟课";
-    el("location").textContent = pos + " · " + s.source.source_id + " · 物理第 " + s.source.pdf_page + " 页";
-    el("cite").textContent = s.source.filename + "\n物理第 " + s.source.pdf_page + " 页\nSHA-256 " + s.source.sha256;
+    el("location").textContent = pos + " · " + s.source.source_id + (s.source.pdf_page ? " · 物理第 "+s.source.pdf_page+" 页" : "");
+    el("cite").textContent = s.source.filename + (s.source.pdf_page ? "\n物理第 "+s.source.pdf_page+" 页" : "")+"\nSHA-256 "+s.source.sha256;
   }
   el("page").hidden = !s.page_image;
   if (s.page_image) {
@@ -140,6 +140,11 @@ function drawPractice(s) {
     parent.append(node);
     return node;
   }
+  const g=m.guided;
+  if (g) {
+    append(panel,"p",({"needs_practice":"本点待练","ready_for_next":"本轮过关","paused":"已暂停","skipped_by_user":"已跳过"})[g.status]);
+    if (g.feedback) append(panel,"p",g.feedback);
+  }
   const message = append(panel,"p",m.prompt);
   message.className = "practice-prompt";
   if (m.goal) append(panel,"p",m.goal);
@@ -195,7 +200,12 @@ function drawPractice(s) {
     if (busy) return;
     busy=true;
     const payload={attempt_id:s.attempt_id,revision:s.revision,action_id:crypto.randomUUID(),kind};
-    if (draftId) payload.draft_id=draftId;
+    if (draftId && kind!=="point_control") payload.draft_id=draftId;
+    if (kind==="point_control") { payload.control=draftId; if(draftId==="explain")payload.text=input.value; }
+    if (g && ["question_seen","feedback_seen"].includes(kind) && g.outbound_id) payload.feedback_id=g.outbound_id;
+    if (g && ["question_seen","submit"].includes(kind)) {
+      payload.question_id=g.question.id;payload.question_sha256=g.question.sha256;
+    }
     if (["submit","accept"].includes(kind)) payload.base_draft=latest?.id??null;
     if (["save_draft","submit","help"].includes(kind)) payload.text=input.value;
     try {
@@ -205,6 +215,26 @@ function drawPractice(s) {
       if (live && active?.attempt_id===s.attempt_id && next.attempt_id===s.attempt_id) draw(next);
     } catch (_) { status.textContent="未保存，请核对当前版本后重试"; }
     finally { busy=false; }
+  }
+  if (g) {
+    label.firstChild.textContent="本题回答";
+    input.defaultValue=retained ?? (m.unsubmitted || "");input.value=input.defaultValue;
+    const answering=g.enabled && g.status==="needs_practice" && !g.pending_response;
+    input.disabled=!answering;
+    if (!g.enabled) { append(edit,"p","逐点教学已关闭，原稿可回看。");return; }
+    if (answering) {
+      control("提交回答",()=>act("submit")).disabled=g.question.status!=="sent";
+      if (g.question.status==="planned") requestAnimationFrame(()=>{
+        if (live && active===s && document.visibilityState==="visible" && message.getClientRects().length) act("question_seen");
+      });
+      control("请解释",()=>act("point_control","explain"));
+      control("暂停",()=>act("point_control","pause"));control("跳过本点",()=>act("point_control","skip"));
+    } else if (g.status==="paused" || g.status==="skipped_by_user") control("继续本点",()=>act("point_control","resume"));
+    if (g.outbound_id && !g.feedback_seen && (g.question.status!=="planned" || !answering)) requestAnimationFrame(()=>{
+      if (live && active===s && document.visibilityState==="visible" && panel.getClientRects().length) act("feedback_seen");
+    });
+    if (g.pending_response) append(edit,"p","已提交，待本轮教练反馈");
+    return;
   }
   control(latest?"提交修订":"提交首稿",()=>act("submit"));control("保存草稿",()=>act("save_draft"));
   if (!fb) control("请给一个提示",()=>act("help"));

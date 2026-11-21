@@ -90,6 +90,7 @@ def release_page(repo, root, spec, permission):
     if permission is None:return None
     require(permission in {"lesson_page","worked_example"},"unknown page permission")
     src=spec["source"]
+    require(src.get("source_kind")!="video","video-only point has no PDF page to release")
     if src["role"]=="worked_examples_with_answers":
         require(permission=="worked_example","full worked page requires its specific release")
     catalog=load_json(edition_path(repo,src["edition"]))

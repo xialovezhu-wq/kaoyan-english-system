@@ -161,6 +161,21 @@ def run(args):
                      or (current.get("practice") or {}).get("phase")=="transfer")
         coaching["lesson_context"]=active_context(repo,repo/"intake",phase="open_assessment" if protected else "before_attempt")
         coaching["capture_scope"]={"status":"after_class_import","formal_write_count":0}
+    if args.action in {"start-today","resume"}:
+        from english_pipeline.guided_point_cli import selected
+        from english_pipeline.guided_points import enabled,state_view
+        guided_key=selected(root,thread) if not args.synthetic else key
+        current_path=ws.folder(root,guided_key)/"current.json"
+        saved=load_json(current_path) if current_path.is_file() else {}
+        if args.action=="start-today" and saved.get("status")=="active" and (
+                saved.get("micro",{}).get("task",{}).get("mode")=="open" or (saved.get("practice") or {}).get("phase")=="transfer"):
+            return {"status":"open_assessment_active","entity_key":guided_key,"answer_view":"current_prompt_only","formal_write_count":0}
+        if saved.get("micro",{}).get("guided") and not enabled(root) and args.action=="resume":
+            args.action="start-today"
+        if enabled(root) and saved.get("micro",{}).get("guided"):
+            from english_pipeline.guided_points import read_scope
+            read_scope(repo,root,saved["micro"]["task"])
+            return {**coaching,"status":"resume_guided_course_point","point":state_view(saved)}
     if args.action=="start-today":
         from english_pipeline.writing_plan import current_plan
         plan=current_plan(repo)
@@ -178,6 +193,10 @@ def run(args):
                     "prompt_entry":"query-writing-prompt","answer_view":"question_only"}
         cursor=plan["resume_course"]
         if not cursor:return {**coaching,"status":"course_watch_complete","today":plan["writing_label"]}
+        from english_pipeline.guided_points import enabled
+        if enabled(root):
+            coaching["point_entry"]={"teaching_mode":"guided_course_point","command":"english_writing.py point start",
+                                    "when_unknown":"继续视频，把当前老师讲到的一个知识点告诉我。"}
         coaching["resume_course"]={k:cursor[k] for k in ("unit","playlist","number","title","position")}
         goal="跟随老师学习"+cursor["title"]+"。"
         if cursor["position"] is not None:
@@ -192,6 +211,15 @@ def run(args):
             state=ws.resume(root,key)
         else:
             state=ws.enter(repo,root,key,request,expected=prev["revision"] if prev else None)
+        if enabled(root):
+            frozen=ws.spec_for(repo,state)
+            if frozen.get("points"):
+                from english_pipeline.guided_points import begin,state_view
+                entry=frozen["points"][0]
+                result=begin(repo,root,key,{**entry,"lesson_id":frozen["lesson_id"],"revision":state["revision"],
+                             "practice_id":object_sha256([state["attempt_id"],entry["lesson_point_id"]])[:32],
+                             "source":{"kind":"registered_lesson","lesson_sha256":state["source_version"]}},thread)
+                return {**coaching,**result,"point":state_view(ws.current(root,key))}
     elif args.action=="preview":
         state=ws.standby(repo,root,key)
     elif args.action=="open":
@@ -231,6 +259,9 @@ def run(args):
                 "resume":"resume this same unit","chat_url":chat_link(RUNTIME,key,ready)}}
 
 def main():
+    if sys.argv[1:2]==["point"]:
+        from english_pipeline.guided_point_cli import main as point_main
+        return point_main(sys.argv[2:])
     if sys.argv[1:2]==["micro"]:
         from english_pipeline.writing_practice_cli import main as micro_main
         return micro_main(sys.argv[2:])

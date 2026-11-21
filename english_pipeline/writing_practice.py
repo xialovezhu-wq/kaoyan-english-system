@@ -27,6 +27,7 @@ def start(repo, root, key, request):
     if os.environ.get("KAOYAN_ENGLISH_MICRO_WRITING","on") == "off":
         return {"status":"disabled"}
     spec = request["task"]
+    check("course_point" not in spec and spec.get("teaching_mode")!="guided_course_point","use the verified lesson-point entry")
     ref = spec.get("source_ref")
     if ref:
         if not request.get("reading_completed"):
@@ -54,10 +55,19 @@ def _start(root,repo,key,request,task,ref):
         for row in prior.values():
             previous = row["micro"]["task"]
             same = previous["task_id"] == task["task_id"] and previous["task_version"] == task["task_version"]
+            guided_id=request.get("guided_practice_id")
+            if guided_id:
+                old_id=(row["micro"].get("guided") or {}).get("practice_id")
+                if guided_id==old_id:
+                    check(object_sha256(task)==row["source_version"],"practice already has another frozen contract")
+                    return {"status":"already_offered","attempt_id":row["attempt_id"],"revision":row["revision"]}
+                if previous.get("course_point") and same:
+                    check(previous==task,"use a new version for changed lesson criteria")
+                same=False
             if same:
                 check(object_sha256(task)==row["micro"]["request_hash"],"a changed task needs a new version")
                 return {"status":"already_offered","attempt_id":row["attempt_id"],"revision":row["revision"]}
-            if (ref and previous.get("source_ref") and ref.get("completion_id")==previous["source_ref"].get("completion_id")
+            if (ref and previous.get("teaching_mode")!="guided_course_point" and previous.get("source_ref") and ref.get("completion_id")==previous["source_ref"].get("completion_id")
                     and task["mode"]=="training" and previous["mode"]=="training"):
                 return {"status":"reading_offer_already_used"}
         relation=task["task_relation"]
@@ -93,6 +103,14 @@ def _start(root,repo,key,request,task,ref):
             atomic_write_json(spec_path,task)
         micro=dict(task=task,request_hash=sha,relation=relation,opened_at=stamp,events=[],drafts=[],reviews=[],feedback=None,
                    skipped=False,switched=False,unsubmitted="",corrections=[])
+        if request.get("guided_practice_id"):
+            from .guided_points import initial
+            prior_guide=(old.get("micro",{}).get("guided") if old else None)
+            check(not prior_guide or prior_guide["status"] in {"ready_for_next","paused","skipped_by_user"},"finish, pause or explicitly change the current point first")
+            micro["guided"]=initial(task,request["guided_practice_id"])
+            micro["guided"]["start_control"]=request["initial_control"]
+            check(not old or (old.get("micro") or {}).get("task",{}).get("mode")!="open" and
+                  (old.get("practice") or {}).get("phase")!="transfer","protected assessment active")
         state=workspace.commit(directory,dict(entity_key=key,revision=1 if not old else old["revision"]+1,
             source_version=sha,attempt_id=uuid4().hex,access_epoch=uuid4().hex,status="active",stage="attempt",
             lesson_id=task["task_id"],started_at=stamp,notes=[],templates=[],page_release=None,micro=micro))
@@ -108,7 +126,10 @@ def current_draft(micro):
     return micro["drafts"][-1] if micro["drafts"] else None
 
 
-def operate(repo, root, key, posted, *, coach=False):
+def operate(repo, root, key, posted, *, coach=False, native=None):
+    check(not any(k.startswith("_") for k in posted),"client supplied internal binding")
+    if native:
+        posted={**posted,**native}
     directory=workspace.folder(root,key)
     with exclusive_lock(directory/"display.lock"):
         state=workspace.current(root,key)
@@ -120,20 +141,68 @@ def operate(repo, root, key, posted, *, coach=False):
         if existing:
             check(existing["request_sha256"]==request_hash,"action id conflict")
             return {"status":"saved","id":eid,"revision":state["revision"]}
+        if posted.get("_turn"):
+            raw=posted["_turn"]
+            prior=next((ev for ev in m["events"] if ev.get("original_message_id")==raw["id"] and ev.get("original_session")==raw["session"]),None)
+            if prior:
+                check(prior["original_sha256"]==raw["sha256"] and prior["question_id"]==raw["question_id"] and
+                      prior.get("decision_input_sha256")==object_sha256(posted["decision"]),"original point turn conflict")
+                return {"status":"saved","id":prior["id"],"revision":state["revision"]}
         check(state["status"]=="active" and posted["revision"]==state["revision"], "stale draft revision")
         task=m["task"]; draft=current_draft(m); fb=m["feedback"]
         check(not m["skipped"],"this optional task was skipped")
         op=posted["kind"]; stamp=now()
         event=dict(id=eid,kind=op,at=stamp,base_revision=state["revision"],request_sha256=request_hash,
                    provider="tutor" if coach else "learner")
-        if coach:
+        if posted.get("_client_request_sha256"):event["client_request_sha256"]=posted["_client_request_sha256"]
+        guided=m.get("guided")
+        if guided:
+            from . import guided_points as points
+            check(points.enabled(root),"guided_points_disabled")
+            points.read_scope(repo,root,task)
+            allowed=({"point_decision","point_control","point_turn","question_seen","feedback_seen","exposure"} if coach else
+                     {"question_seen","feedback_seen","point_control","submit","save_draft","locate","select_draft"})
+            check(op in allowed,"use the current point's question and evidence")
+            if not coach and op=="point_control":
+                check(posted.get("control") in {"pause","resume","skip","explain","acknowledge","watched","time_elapsed","change_target","clarify_intent"} and "explanation" not in posted,
+                      "invalid learner control")
+        elif coach:
             check(op in {"feedback","assess","correct_opportunity","exposure"}, "unknown tutor action")
         else:
             check(op in {"save_draft","submit","help","example","rewrite","accept","decline","skip","locate","select_draft"}, "unknown learner action")
         if op in {"submit","save_draft","help"}:
             text=posted.get("text","")
             check(isinstance(text,str) and len(text)<=20000, "writing text too long")
-        if op in {"locate","select_draft"}:
+        if op=="point_turn":
+            points.resolve_turn(m,state,posted,event)
+        elif op=="point_decision":
+            points.decide(m,state,posted,event)
+        elif op=="feedback_seen":
+            points.confirm_feedback(m,posted["feedback_id"],event,posted.get("_message_id"))
+        elif op=="question_seen":
+            points.mark_sent(guided,posted,event)
+            points.confirm_feedback(m,posted.get("feedback_id"),event,posted.get("_message_id"))
+        elif op=="point_control":
+            if not coach and posted["control"]=="explain":
+                check(not guided.get("incoming"),"a submitted message awaits review")
+                buffered=posted.get("text","")
+                check(isinstance(buffered,str) and len(buffered)<=20000,"invalid unsubmitted buffer")
+                m["unsubmitted"]=buffered
+                text="请解释这个点。"
+                event["submitted_text"]=text
+                guided["incoming"]=dict(id=eid,text=text,sha256=text_sha256(text),at=stamp,session=state["entity_key"],
+                                        question_id=points.current_question(guided)["id"],medium="typed",verification="as_submitted")
+            else:
+                points.control(m,posted,event)
+                labels={"pause":"暂停","skip":"跳过本点","resume":"继续本点","acknowledge":"我懂了","watched":"已看完",
+                        "time_elapsed":"时间到","change_target":"更换目标","clarify_intent":"请澄清"}
+                if not native:
+                    event["submitted_text"]=labels[posted["control"]]
+                original=event.get("submitted_text",posted.get("_original_text",""))
+                event.update(original_message_id=posted.get("_message_id",eid),original_sha256=text_sha256(original),
+                             original_session=posted.get("_session",state["entity_key"]),original_medium="unknown",
+                             question_id=points.current_question(guided)["id"])
+        elif op in {"locate","select_draft"}:
             ident=posted["draft_id"]
             check(any(d["id"]==ident for d in m["drafts"]), "unknown original draft")
             if op=="locate":
@@ -166,7 +235,16 @@ def operate(repo, root, key, posted, *, coach=False):
             else:
                 check(fb and fb[op],"no suggestion is available for this draft")
                 event.update(feedback_id=fb["id"],support="example" if op=="example" else "ai_rewrite",visible_text=fb[op])
+        elif op=="submit" and guided:
+            points.bind_submission(m,posted)
+            check(not guided.get("incoming") and isinstance(text,str) and text.strip(),"wait for this submitted message")
+            if not native:event["submitted_text"]=text
+            guided["incoming"]=dict(id=posted.get("_message_id",eid),text=text,sha256=text_sha256(text),
+                                    at=posted.get("_native_at",stamp),session=posted.get("_session",state["entity_key"]),
+                                    question_id=posted["question_id"],medium=posted.get("medium","typed"),verification=posted.get("verification","as_submitted"))
+            m["unsubmitted"]=""
         elif op in {"submit","accept"}:
+            if guided:points.bind_submission(m,posted)
             base=posted.get("base_draft")
             check(base==(draft["id"] if draft else None),"stale base draft")
             if op=="accept":
@@ -179,13 +257,14 @@ def operate(repo, root, key, posted, *, coach=False):
             support=help_level([{"support":s.get("support","unknown")} for s in task["surfaces"].values()]+m["events"])
             normalized=lambda v:" ".join(v.casefold().split())
             copied=any(e.get("visible_text") and e.get("support") in {"example","ai_rewrite"}
-                       and normalized(e["visible_text"]) in normalized(text) for e in m["events"])
+                       and normalized(e.get("example_text") or e["visible_text"]) in normalized(text) for e in m["events"])
             known=task.get("observed_scope_complete") is True
             conditions=dict(task_cue=task["task_cue"],answer_support=support if known or support!="none" else "unknown",
                             task_relation=m["relation"],production_origin="ai_or_mixed" if op=="accept" or copied else
                             "human_revision" if draft else "human_initial")
             doc=dict(id=eid,parent=base,text=text,sha256=text_sha256(text),at=stamp,conditions=conditions,
                      feedback_id=fb["id"] if fb else None,help_ids=[e["id"] for e in m["events"] if e.get("support")])
+            if guided:points.recorded_submission(m,doc,posted)
             m["drafts"].append(doc);m["unsubmitted"]=""
             if fb and op=="submit" and fb["decision"]=="pending":
                 fb["decision"]="self_revised"
@@ -205,6 +284,9 @@ def operate(repo, root, key, posted, *, coach=False):
             value=posted["opportunity"]
             check(value in {"applicable","unknown","not_applicable"} and posted["reason"].strip(),"correction needs an explicit reason")
             m["corrections"].append(dict(at=stamp,value=value,reason=posted["reason"],id=eid))
+        if guided and op in {"point_turn","point_decision","point_control"} and event.get("visible_text"):
+            event["prepared_feedback"]=event.pop("visible_text")
+            event["prepared_support"]=event.pop("support",None)
         m["events"].append(event)
         state=workspace.commit(directory,{**state,"revision":state["revision"]+1})
         return {"status":"saved","id":eid,"revision":state["revision"]}
@@ -234,7 +316,7 @@ def confirmed_transfer(repo):
     for row in load_learning_events(ledger) if ledger.exists() else []:
         w=row["event"].get("writing_memory") or {}
         obs=w.get("writing_task")
-        if (not obs or "parent_draft_id" not in obs or obs["parent_draft_id"] is not None or row["event_id"] in invalid
+        if (not obs or obs.get("lesson_point") or "parent_draft_id" not in obs or obs["parent_draft_id"] is not None or row["event_id"] in invalid
                 or w["point_key"] in lifecycle.get("pending_keys",{})):
             continue
         ident=obs["observation_id"]
@@ -246,7 +328,7 @@ def confirmed_transfer(repo):
 
 
 def report(root,key):
-    ms=[r["micro"] for r in attempts(root,key).values()]
+    ms=[r["micro"] for r in attempts(root,key).values() if not r["micro"].get("guided")]
     return dict(scope="reader observations pending native formal confirmation", formal_write_count=0,
                 before=metrics(summarize(m,corrected=False) for m in ms),
                 current=metrics(summarize(m) for m in ms),corrections=[c for m in ms for c in m["corrections"]])
@@ -258,6 +340,16 @@ def projection(repo, root, state, meta):
     public={"phase":"skipped" if m["skipped"] else "writing","prompt":task["prompt"],"drafts":[
         {k:d[k] for k in ("id","parent","text","sha256")} for d in m["drafts"]],"feedback":None,
         "unsubmitted":m["unsubmitted"],"selected_draft":m.get("selected_draft"),"exposed":[],"reviews":[]}
+    if m.get("guided"):
+        from .guided_points import read_scope,state_view
+        read_scope(repo,root,task)
+        view=state_view(state)
+        public["guided"]={k:view[k] for k in ("lesson_point_id","status","feedback","pending_response","outbound_id","feedback_seen")}
+        q=view["question"];public["guided"]["question"]={k:q[k] for k in ("id","text","status")}
+        public["guided"]["question"]["sha256"]=text_sha256(q["text"])
+        from .guided_points import enabled
+        public["guided"]["enabled"]=enabled(root)
+        public["prompt"]=view["question"]["text"] if view["status"]=="needs_practice" else ""
     if task["mode"]=="training" or m["switched"] or draft:
         public["goal"]=task["target_description"]
         if task.get("source_ref"):

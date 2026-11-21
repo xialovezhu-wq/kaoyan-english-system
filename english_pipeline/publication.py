@@ -269,6 +269,11 @@ def _complete_snapshot_closeout(repo_root: Path, state_dir: Path, receipt: dict[
         # A completed teaching generation needs its own snapshot identity. This
         # never creates a second learning event or invokes the formal writer.
         event_id += ":memory:" + object_sha256(memory_generation)[:24]
+    if memory_generation:
+        from .writing_publication import summary_identity
+        identity=summary_identity(state_dir)
+        if identity.get("status")=="available":
+            event_id+=":teaching:"+identity["version"][:24]
     target = state_dir / "publication" / f"{event_id}.json"
     version: dict[str, Any] = {}
     pending_component = "local_context"

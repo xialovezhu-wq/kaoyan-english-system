@@ -117,6 +117,9 @@ class Reader(BaseHTTPRequestHandler):
                 return self.respond(200,(UI/"writing.html").read_bytes().replace(b"__WRITING_RELEASE__",writing_version().encode()),"text/html",CSP)
             if end in (["revision"],["projection"]) and not params:
                 m=s["micro"]; drafts=m["drafts"]
+                if m.get("guided"):
+                    from .guided_points import read_scope
+                    read_scope(repo,root,m["task"])
                 draft=next((d for d in drafts if d["id"]==m.get("selected_draft")),drafts[0] if drafts else None)
                 meta={**writing.metadata(s),"entity_key":key,"presentation_profile":"english_draft_reference","focus_anchors":[]}
                 if end==["revision"]:
@@ -247,7 +250,15 @@ def serve(repo, root):
     with ThreadingHTTPServer(("127.0.0.1", port), Reader) as server:
         server.repo, server.root = repo, root
         server.health = health_fields(uuid4().hex)
-        rec = {**server.health, "port":server.server_port, "pid":os.getpid()}
+        # Bind the live worker to the actual loaded Python functions without changing the global health protocol.
+        from . import guided_points, writing_practice
+        import hashlib, marshal
+        loaded={}
+        for name,fn in (("course_decision",guided_points.decide),("reader_operation",writing_practice.operate),("http",Reader.read_route)):
+            path=Path(sys.modules[fn.__module__].__file__)
+            loaded[name]={"source_sha256":hashlib.sha256(path.read_bytes()).hexdigest(),
+                          "loaded_code_sha256":hashlib.sha256(marshal.dumps(fn.__code__)).hexdigest()}
+        rec = {**server.health, "port":server.server_port, "pid":os.getpid(),"course_binding":loaded}
         atomic_write_json(config, rec)
         print(json.dumps(rec), flush=True)
         server.serve_forever()

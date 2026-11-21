@@ -100,6 +100,28 @@ def cue_level(text, declared, forms, functions):
     return declared
 
 
+def checked_rubric(spec, template):
+    criteria=spec.get("success_criteria",template["criteria"])
+    check(isinstance(criteria,dict) and 1<=len(criteria)<=8,"one to eight explicit criteria required")
+    for key,meaning in criteria.items():
+        checked_id(key)
+        check(isinstance(meaning,str) and 0<len(meaning.strip())<=1200,"invalid success condition")
+    result={"success_criteria":dict(criteria)}
+    for name,default in (("counterexamples",template["counterexamples"]),("hint_ladder",["指出当前目标与位置","提供局部方向","按需给例子或建议"])):
+        values=spec.get(name,default)
+        check(isinstance(values,list) and 1<=len(values)<=12 and all(isinstance(s,str) and 0<len(s.strip())<=2000 for s in values),"invalid "+name)
+        result[name]=list(values)
+    genre=spec.get("genre_constraint",template["genre_constraint"])
+    check(isinstance(genre,str) and 0<len(genre.strip())<=2000,"invalid genre constraint")
+    if "hint_policy" in spec:
+        policy=spec["hint_policy"]
+        check(isinstance(policy,dict) and 0<len(policy)<=8 and all(isinstance(v,str) and 0<len(v.strip())<=1200 for v in policy.values()),
+              "invalid task-specific help policy")
+        for key in policy:checked_id(key)
+        result["hint_policy"]=dict(policy)
+    return {**result,"genre_constraint":genre}
+
+
 def task_contract(spec):
     from .writing_personal import skill_key
     template = TEMPLATES[spec["task_type"]]
@@ -127,9 +149,11 @@ def task_contract(spec):
     cue = next((v for v in ("form","function","unknown") if v in levels), "none")
     if spec["mode"] == "training" and cue == "none":
         cue = "function"  # The training view shows the goal.
-    return {**spec, "forms":sorted(forms), "functions":sorted(functions), "contract": VERSION, "exam_family":"kaoyan_english_i", "task_cue":cue, "success_criteria":template["criteria"],
-            "qualified_variants":variants, "counterexamples":template["counterexamples"], "genre_constraint":template["genre_constraint"],
-            "hint_ladder":["指出当前目标与位置","提供局部方向","按需给例子或建议"], "example_hidden":True,
+    mode=spec.get("teaching_mode","open_assessment" if spec["mode"]=="open" else "reading_micro")
+    check(mode in {"guided_course_point","reading_micro","open_assessment"} and
+          (mode=="open_assessment")== (spec["mode"]=="open"),"incompatible teaching/assessment modes")
+    return {**spec, "forms":sorted(forms), "functions":sorted(functions), "contract": VERSION, "exam_family":"kaoyan_english_i", "task_cue":cue, **checked_rubric(spec,template),
+            "qualified_variants":variants, "example_hidden":True,
             "denominator_rule":RULE}
 
 
@@ -209,7 +233,12 @@ def observation(task, draft, review=None, *, opportunity=None):
 def safe_fields(episode):
     value=episode.get("writing_task") or {}
     if value:
-        return {k:value[k] for k in PUBLIC if k in value}
+        fields={k:value[k] for k in PUBLIC if k in value}
+        if value.get("lesson_point"):
+            from .lesson_point_memory import validate
+            point=validate(value["lesson_point"])
+            if point["shareable"]:fields["lesson_point"]=point
+        return fields
     return dict(activity="writing", task_cue="unknown",answer_support="unknown",task_relation="unknown",
                 production_origin="unknown",target_result="unknown",eligibility="eligibility_pending",
                 open_task_transfer_observed=False)

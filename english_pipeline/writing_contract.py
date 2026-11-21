@@ -47,9 +47,18 @@ def lesson(repo, request):
     """The coach supplies only material for the named course segment. No automatic lesson selection."""
     strings(request, ("course", "section", "goal", "task_profile"))
     require(request["task_profile"] in TASKS, "this exam task is not enabled")
-    item = locate(repo, request.get("edition", EDITION), request["source_id"], request["pdf_page"])
-    require(request["source_sha256"] == item["sha256"], "course page hash mismatch")
-    item.pop("reference")
+    if "video_material" in request:
+        from pathlib import Path
+        material=request["video_material"]
+        path=Path(material["path"]).expanduser().resolve(strict=True)
+        require(path.is_file() and path.suffix.lower() in {".mp4",".m4v",".mkv",".webm",".mov"} and
+                file_sha256(path)==material["sha256"],"original course video hash mismatch")
+        item=dict(source_id=identifier(request["source_id"]),sha256=material["sha256"],filename=path.name,
+                  pdf_page=None,source_kind="video",original_path=str(path))
+    else:
+        item = locate(repo, request.get("edition", EDITION), request["source_id"], request["pdf_page"])
+        require(request["source_sha256"] == item["sha256"], "course page hash mismatch")
+        item.pop("reference")
     assets = {}
     selected = list(request.get("assets", []))
     if request.get("asset_ids"):
@@ -88,7 +97,14 @@ def lesson(repo, request):
         if video.get("end_seconds") is not None:
             require(video.get("start_seconds") is not None and video["end_seconds"] >= video["start_seconds"], "invalid time interval")
     require(isinstance(request.get("prompt", ""),str),"invalid course prompt")
-    return dict(contract=VERSION, course=request["course"], section=request["section"],
+    extra={}
+    if "points" in request:
+        rows=request["points"]
+        require(isinstance(rows,list) and rows and len(rows)<=128,"invalid lesson points")
+        ids=[identifier(r["lesson_point_id"]) for r in rows]
+        require(len(ids)==len(set(ids)) and all("criteria" in r and "goal" in r and "question" in r for r in rows),"duplicate or incomplete lesson point")
+        extra["points"]=rows
+    return dict(contract=VERSION, **extra, course=request["course"], section=request["section"],
                 lesson_id=identifier(request["lesson_id"]), goal=request["goal"], source=item,
                 task_profile=request["task_profile"], task_constraint=TASKS[request["task_profile"]][1],
                 assets=assets, prompt=request.get("prompt", ""), video=video)
@@ -132,6 +148,7 @@ def observation_fields(event):
 
 def json_document(root, attachment):
     import json
+    root=root.resolve(strict=True)
     path=(root/attachment["path"]).resolve(strict=True)
     require(path.is_relative_to(root) and file_sha256(path)==attachment["sha256"],"changed Capture attachment")
     return json.loads(path.read_bytes())

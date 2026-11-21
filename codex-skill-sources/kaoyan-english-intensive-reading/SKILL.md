@@ -55,3 +55,5 @@ Capture 只记录事实，`formal_write_count=0`、`background_processing=none`�
 核对用户当前完整作答确实正确时，已可用的官方 Codex confetti 工具可按既有偏好静默调用一次；不重复探测，不为庆祝创建 Capture，不等同掌握。
 
 读后短写、首稿定位和课后原件核对沿[读写任务合同](references/reading-writing-v2.md)使用现有作文与正式收尾入口。
+
+**跟作文视频逐点学**时，走[视频逐点教练](references/guided-course-points.md)和同一作文入口的 `point`。先核真实课节或本人刚转述的当前点，开点时冻结成功条件。每次按本人刚答的内容选择下一步；必要条件已由本人产出充分达到就明确本轮过关。观看书签与课堂进度分别续接。用法与课后收尾见[作文随课资料页](references/writing-workspace.md)。

@@ -17,7 +17,15 @@ def display_attempts(repo, tr):
     from .writing_practice import attempts
     if not tr.native:
         return {}
-    return attempts(runtime_for(repo),"WRITING-"+object_sha256(tr.native)[:24])
+    from .guided_point_cli import selected
+    root=runtime_for(repo)
+    key="WRITING-"+object_sha256(tr.native)[:24]
+    related=selected(root,tr.native)
+    original=attempts(root,key)
+    if related!=key:
+        current_id=load_json(root/"writing"/related/"current.json")["attempt_id"]
+        original.update({a:s for a,s in attempts(root,related).items() if a==current_id})
+    return original
 
 
 def visible_rows(repo,tr):
@@ -30,13 +38,18 @@ def visible_rows(repo,tr):
                       "display_attempt_id":state["attempt_id"],"native_action_id":key}))
     for s in display_attempts(repo,tr).values():
         m=s["micro"];task=m["task"]
-        append(s,s["attempt_id"],"assistant",task["prompt"],m["opened_at"])
+        if not m.get("guided"):append(s,s["attempt_id"],"assistant",task["prompt"],m["opened_at"])
         drafts={d["id"]:d for d in m["drafts"]}
         for e in m["events"]:
             if e["id"] in drafts:
                 d=drafts[e["id"]]
-                append(s,d["id"],"user",d["text"],d["at"])
-            elif e.get("visible_text"):
+                if not d.get("native_message_id") or d.get("native_session")==s["entity_key"]:
+                    append(s,d["id"],"user",d["text"],d["at"])
+            elif m.get("guided") and e.get("submitted_text"):
+                append(s,e["id"],"user",e["submitted_text"],e["at"])
+            elif m.get("guided") and e.get("seen_at") and not e.get("outbound_native_message_id"):
+                append(s,e["id"],"assistant",e["visible_text"],e["seen_at"])
+            elif e.get("visible_text") and (not m.get("guided") or e["kind"]=="question_seen" and not e.get("native_message_id")):
                 append(s,e["id"],"assistant",e["visible_text"],e["at"])
     if rows:
         tr.messages=sorted([*tr.messages,*rows],key=lambda r:datetime.fromisoformat(r["created_at"].replace("Z","+00:00")))
@@ -46,7 +59,7 @@ def visible_rows(repo,tr):
 
 def material(repo,tr,state):
     from .writing_workspace import folder,lesson_file
-    k="WRITING-"+object_sha256(tr.native)[:24]; sha=state["source_version"]
+    k=state["entity_key"]; sha=state["source_version"]
     t=state["micro"]["task"]
     return dict(task_id=t["task_id"],prompt=t["prompt"],
         origin=dict(kind="writing_reader_v2",lesson_sha256=sha,display_attempt_id=state["attempt_id"]),
@@ -72,11 +85,21 @@ def from_capture(root, message, review_surfaces=None):
     check(snapshots,"frozen writing proof missing")
     m=max(snapshots,key=lambda row:row["revision"])["micro"]
     mid=message["message_id"]
-    draft=next((d for d in m["drafts"] if "WRUI-"+d["id"]==mid),None)
+    draft=next((d for d in m["drafts"] if "WRUI-"+d["id"]==mid or
+                (d.get("native_message_id")==mid and d.get("native_session")==identity["session_id"])),None)
     if draft is None:
-        return None
+        if not m.get("guided"):return None
+        bound=next((ev for ev in m["events"] if ev.get("original_message_id") in (mid,mid.removeprefix("WRUI-"))
+                    and ev.get("question_id") and ev.get("original_session") in (identity["session_id"],"WRITING-"+object_sha256(identity["session_id"])[:24])),None)
+        if not bound:return None
+        from .lesson_point_memory import control_proof
+        t=m["task"];point=control_proof(t,m,bound,message)
+        return dict(activity="writing",task_type=t["task_type"],task_id=t["task_id"],task_version=t["task_version"],rubric_version=t["rubric_version"],
+                    target_skill_id=t["target_skill_id"],task_cue=t["task_cue"],answer_support="unknown",task_relation="same_task",production_origin="unknown",
+                    target_result="not_applicable",eligibility="ineligible",open_task_transfer_observed=False,task_sha256=object_sha256(t),
+                    observation_id=object_sha256([bound["id"],point["decision_ref"]]),lesson_point=point)
     check(message["role"]=="user" and message["content"]==draft["text"] and message["created_at"]==draft["at"]
-          and message["metadata"].get("display_attempt_id")==origin["display_attempt_id"],"submitted draft mismatch")
+          and (message["metadata"].get("display_attempt_id")==origin["display_attempt_id"] or draft.get("native_message_id")==mid),"submitted draft mismatch")
     task=m["task"]
     result=next((r for r in reversed(m["reviews"]) if r["draft_id"]==draft["id"]),None)
     conditions=dict(draft["conditions"])
@@ -85,7 +108,10 @@ def from_capture(root, message, review_surfaces=None):
     # A target-free classification requires all adjacent chat instructions in the captured scope to be reviewed.
     # The opening conversation turn must be present; an excerpt without its beginning stays unknown.
     rows=load_json(root/"conversation.json")["messages"]
-    if identity.get("missing_attachments") or not any(r["message_id"]=="WRUI-"+origin["display_attempt_id"] for r in rows):
+    opening_ids={"WRUI-"+origin["display_attempt_id"]}
+    if m.get("guided"):
+        opening_ids.update(q.get("message_id") or ("WRUI-"+q.get("delivery_id","")) for q in m["guided"]["questions"] if q["id"]==draft["question_id"])
+    if identity.get("missing_attachments") or not any(r["message_id"] in opening_ids for r in rows):
         for k in ("task_cue","answer_support"):
             if conditions[k]=="none": conditions[k]="unknown"
     audits=review_surfaces or {}
@@ -108,4 +134,10 @@ def from_capture(root, message, review_surfaces=None):
         if row["role"]=="assistant" and " ".join(draft["text"].lower().split()) in " ".join(row["content"].lower().split()):
             conditions["production_origin"]="ai_or_mixed"
     opportunity=m["corrections"][-1]["value"] if m["corrections"] else None
-    return observation(task,{**draft,"conditions":conditions},result,opportunity=opportunity)
+    value=observation(task,{**draft,"conditions":conditions},result,opportunity=opportunity)
+    if m.get("guided") and result:
+        from .lesson_point_memory import frozen_proof
+        value["lesson_point"]=frozen_proof(m,draft,result)
+        if draft.get("attachment_sha256"):value["original_attachment_sha256"]=draft["attachment_sha256"]
+        value["target_result"]=result["target_result"]
+    return value

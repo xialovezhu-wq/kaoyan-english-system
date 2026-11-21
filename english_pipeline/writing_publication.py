@@ -11,7 +11,7 @@ from .util import atomic_write_bytes, bytes_sha256, canonical_bytes, file_sha256
 
 PREFIX = "context/personal-summary/"
 ENTRY = PREFIX + "current.json"
-SCHEMA = "english-teaching-publication/2"
+SCHEMA = "english-teaching-publication/3.1"
 
 
 def verify_graph(repo):
@@ -65,7 +65,13 @@ def freeze_projection(state):
         path = PREFIX + name + ".json"
         data[path] = canonical_bytes({"schema": SCHEMA, "records": records})
         members[name] = dict(path=path, sha256=bytes_sha256(data[path]), points=len(records))
-    coverage = {**coverage, "excluded_points": coverage["total_local_points"] - coverage["included_points"],
+    from .lesson_point_memory import publication_rows
+    points=publication_rows(state)
+    point_path=PREFIX+"lesson-points.json"
+    data[point_path]=canonical_bytes(points)
+    members["lesson_points"]=dict(path=point_path,sha256=bytes_sha256(data[point_path]),points=points["confirmed_point_count"],
+                                  observation_count=points["eligible_observation_count"])
+    coverage = {**coverage,"confirmed_lesson_points":points["confirmed_point_count"], "excluded_points": coverage["total_local_points"] - coverage["included_points"],
                 "excluded": ["protected", "pending_or_invalidated", "older_episodes", "raw_evidence", "quick_only"]}
     data[ENTRY] = canonical_bytes(dict(identity, snapshot_kind="bounded_answer_free_advisory",
                                        scope="latest reviewed observation per eligible point", coverage=coverage, members=members))

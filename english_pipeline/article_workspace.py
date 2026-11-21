@@ -14,7 +14,7 @@ from .errors import PipelineError, ValidationError
 from .util import object_sha256
 
 PROTOCOL = "study-display/v1"
-SERVICE_VERSION = "english-article/1.8.2"
+SERVICE_VERSION = "english-article/1.9.0"
 RUNTIME = Path.home() / "Library/Application Support/KaoyanEnglishArticle"
 SCOPE = ("source_version", "attempt_id", "access_epoch")
 SCHEMA = """

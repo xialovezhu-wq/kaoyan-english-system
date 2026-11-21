@@ -521,6 +521,179 @@
             },
             "open_task_transfer_observed": {
               "type": "boolean"
+            },
+            "lesson_point": {
+              "type": "object",
+              "required": [
+                "action",
+                "classroom_status",
+                "criteria",
+                "decision_ref",
+                "lesson_id",
+                "lesson_point_id",
+                "medium",
+                "point_version",
+                "practice_ref",
+                "question_id",
+                "remaining",
+                "response_kind",
+                "response_sha256",
+                "rubric_version",
+                "schema",
+                "shareable",
+                "source_ref",
+                "updated_at",
+                "verification"
+              ],
+              "properties": {
+                "schema": {
+                  "const": "english-lesson-point/1"
+                },
+                "lesson_id": {
+                  "type": "string",
+                  "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$"
+                },
+                "lesson_point_id": {
+                  "type": "string",
+                  "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$"
+                },
+                "point_version": {
+                  "type": "string",
+                  "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$"
+                },
+                "rubric_version": {
+                  "type": "string",
+                  "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$"
+                },
+                "question_id": {
+                  "type": "string",
+                  "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$"
+                },
+                "practice_ref": {
+                  "type": "string",
+                  "pattern": "^[a-f0-9]{64}$"
+                },
+                "decision_ref": {
+                  "type": "string",
+                  "pattern": "^[a-f0-9]{64}$"
+                },
+                "response_sha256": {
+                  "type": "string",
+                  "pattern": "^[a-f0-9]{64}$"
+                },
+                "source_ref": {
+                  "type": "string",
+                  "pattern": "^[a-f0-9]{64}$"
+                },
+                "action": {
+                  "enum": [
+                    "repair",
+                    "clarify",
+                    "scaffold",
+                    "check_variant",
+                    "advance",
+                    "explain",
+                    "pause",
+                    "resume",
+                    "skip",
+                    "acknowledge",
+                    "watched",
+                    "time_elapsed",
+                    "change_target",
+                    "clarify_intent"
+                  ]
+                },
+                "classroom_status": {
+                  "enum": [
+                    "needs_practice",
+                    "ready_for_next",
+                    "paused",
+                    "skipped_by_user"
+                  ]
+                },
+                "criteria": {
+                  "type": "object",
+                  "maxProperties": 8,
+                  "additionalProperties": {
+                    "enum": [
+                      "met",
+                      "not_met",
+                      "unknown"
+                    ]
+                  }
+                },
+                "remaining": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "uniqueItems": true
+                },
+                "medium": {
+                  "enum": [
+                    "typed",
+                    "submitted_text",
+                    "handwritten",
+                    "ocr",
+                    "speech_to_text",
+                    "copied",
+                    "mixed",
+                    "unknown"
+                  ]
+                },
+                "shareable": {
+                  "type": "boolean"
+                },
+                "verification": {
+                  "enum": [
+                    "as_submitted",
+                    "unverified",
+                    "checked_original"
+                  ]
+                },
+                "response_kind": {
+                  "enum": [
+                    "reading_judgment",
+                    "function",
+                    "specified_form"
+                  ]
+                },
+                "updated_at": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              },
+              "additionalProperties": false,
+              "allOf": [
+                {
+                  "if": {
+                    "properties": {
+                      "action": {
+                        "not": {
+                          "enum": [
+                            "explain",
+                            "pause",
+                            "resume",
+                            "skip",
+                            "acknowledge",
+                            "watched",
+                            "time_elapsed",
+                            "change_target",
+                            "clarify_intent"
+                          ]
+                        }
+                      }
+                    }
+                  },
+                  "then": {
+                    "properties": {
+                      "criteria": {
+                        "minProperties": 1
+                      }
+                    }
+                  }
+                }
+              ]
             }
           }
         },

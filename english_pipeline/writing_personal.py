@@ -46,6 +46,10 @@ FIELDS={"version","host","session_id","message_id","original_sha256","attempt_id
 def fields(event):
     w=event.get("writing_memory")
     valid(isinstance(w,dict) and set(w)-{"submission","message_version","writing_task","surface_reviews"}==FIELDS and w["version"]==VERSION,"作文事件版本或字段不符")
+    point_proof=(w.get("writing_task") or {}).get("lesson_point")
+    if point_proof:
+        from .lesson_point_memory import validate as validate_point
+        validate_point(point_proof)
     version=w.get("message_version")
     if version:
         valid(type(version.get("number")) is int and version["number"]>=2 and re.fullmatch(r"[a-f0-9]{64}",version["fingerprint"]),
@@ -64,7 +68,7 @@ def fields(event):
             valid(w["stage"]=="adoption","照录示范应按采用记录")
         if submission["medium"] in {"ocr","handwritten"} and event["outcome"]!="unresolved":
             valid(submission["verification"]=="checked_original" and submission.get("attachment_sha256"),"手写或 OCR 判定需已核原稿附件")
-        if submission["medium"]=="speech_to_text" and w["point_key"]=="writing_skill:language_control":
+        if submission["medium"]=="speech_to_text" and w["point_key"]=="writing_skill:language_control" and not point_proof:
             valid(event["outcome"]=="unresolved","语音转写文本不能证明原始拼写或书面语法")
     point=skill_key(w["point_key"])
     valid(w["stage"] in LEARNER_STAGES and w["method"] in METHODS and
@@ -146,6 +150,10 @@ def validate(event,resolved,frozen,identities):
     proof=from_capture(pkg,user,w.get("surface_reviews"))
     valid(proof==w.get("writing_task"),"作文任务归因和原稿、曝光或评价版本不符")
     if proof:
+        if proof.get("lesson_point"):
+            from .lesson_point_memory import CONTROLS
+            if proof["lesson_point"]["action"] in CONTROLS:
+                valid(w["stage"] in {"acknowledgment","question","preference"} and event["outcome"]=="unresolved","course control is not an answer")
         valid(proof["target_skill_id"]==w["point_key"],"评估目标与正式观察不同")
         required={"met":"correct","not_met":"incorrect","unknown":"unresolved","not_applicable":"unresolved"}
         valid(event["outcome"]==("unresolved" if w["stage"]=="adoption" else required[proof["target_result"]]),"局部目标结果与正式观察不符")
@@ -170,7 +178,7 @@ def validate(event,resolved,frozen,identities):
                   and prior_binding["task"]["task_id"]!=w["task_id"] and prior_binding["task"]["prompt"]!=binding["task"]["prompt"]
                   and any(m["role"]=="user" and m["message_id"]==origin["message_id"] and digest_message(m)==origin["original_sha256"]
                           and instant(m)<=instant(user) for m in prior_rows),"新题未核实上次真实作品")
-    if w["stage"] in {"first_draft","transfer"} and event["hint_dependence"]=="none":
+    if w["stage"] in {"first_draft","transfer"} and event["hint_dependence"]=="none" and not (proof or {}).get("lesson_point",{}).get("response_kind")=="reading_judgment":
         valid(not any(instant(messages[i])<=instant(user) for i in w["feedback_ids"]),
               "本题已绑定作答前的提示，应据实标记提示依赖")
         authored=normalize_sentence(event["user_response"]).casefold()
@@ -225,7 +233,13 @@ def make_action(repo,state,decision):
     observed=from_capture(root,m,decision.get("surface_reviews"))
     if observed is not None:
         w.update(writing_task=observed,surface_reviews=decision.get("surface_reviews",{}))
+        if observed.get("lesson_point"):
+            lp=observed["lesson_point"]
+            w["submission"]={"medium":lp["medium"],"verification":lp["verification"]}
+            if observed.get("original_attachment_sha256"):w["submission"]["attachment_sha256"]=observed["original_attachment_sha256"]
     if "submission" in decision:
+        if w.get("submission"):
+            valid(all(decision["submission"].get(k)==v for k,v in w["submission"].items()),"submission medium differs from original point evidence")
         w["submission"]=decision["submission"]
     version=u.get("message_versions",{}).get(m["message_id"])
     if version:
