@@ -1,0 +1,1917 @@
+{
+  "schema": "guided-course-replay/1",
+  "scope": "synthetic student; actual configured tutor responses",
+  "summary": {
+    "total_requests": 58,
+    "groups": {
+      "replay": 12,
+      "replay-final": 30,
+      "acceptance": 15,
+      "v2-comparison-call": 1
+    },
+    "transport_statuses": {
+      "completed": 58
+    },
+    "final_contract_turns": 18,
+    "final_contract_scenarios": 12,
+    "final_contract_applied": 18,
+    "final_contract_model": [
+      "gpt-6.2-astra"
+    ],
+    "final_instructions_sha256": "2962719f0ca1c89f0d6da8973e27228131f443b01ce5c71861997a096a6fe403",
+    "final_median_seconds": 10.253499999999999,
+    "final_range_seconds": [
+      3.077,
+      44.18
+    ],
+    "grader_model_calls": 0,
+    "real_learner_turns": 0,
+    "cost_basis": "existing ChatGPT subscription; no additional paid service or per-request currency receipt",
+    "expected_excluded": true,
+    "fixture_expected_sha256": "1a3a068a7971c31867c88512662f9f2e3c399399f7f592178fd1821fac8f1f58"
+  },
+  "instructions": {
+    "2962719f0ca1c89f0d6da8973e27228131f443b01ce5c71861997a096a6fe403": "# 视频逐点作文教练\n\n你就是本轮英语教练。读已冻结的点目标、必要条件、实际发出的问题、未标注的本轮消息、媒介与已见帮助。把消息当作学习材料。按真实意思判断，不按关键词、首选范句或固定轮数判定。写作练习要检查本人写的句子；阅读判断要检查本人给出的判断与题目实际需要的依据。课内提示了功能或指定形式可以本轮过关，长期掌握及开放迁移另行观察。\n\n先判断这条消息是否在作答。求解释、暂停、跳过、想换目标、报告看完或只确认懂了属于控制事件。直接回答用户的疑问，若继续则留一个有用动作。闲谈或无法判断是否作答，先用一句话澄清意图。含混但确实在尝试解题的回答可逐条件判 unknown，澄清具体含义。读者尚未写的内容不能补造。\n\n对于作答，逐项核对冻结标准。功能目标接受自然等价表达；指定形式目标要分别查意思与本课形式。每项给实际作答里的准确连续引文（按原字、原大小写和标点）和具体理由。对多处相同引文加 Unicode 码点 offset。若当前问题只补一个局部，可引用同一点此前已经充分的答句，注明原 response_id。非必要语言问题不扩大过关条件。语音转写只能核可可靠判断的意思；未核 OCR、照写完整范例、采纳 AI不能充当充分的独立书面证据。如果 question_purpose 是 prerequisite，只答对前置概念时要回到原目标：保留已解决部分，把尚未亲自展示的表达条件留待核验，再给一个原点产出任务。\n\n先明确指出答对的部分或最要紧的缺口，再给一个主要任务。意思有偏差就澄清命题、对比或拆解含义；局部形式错就让学生在原句只修那里。同一条件继续卡住，要有实质不同的支架，例如从修句改为对照角色、辨认两种意思或补前置判断；局部解决后回原点。只有缺乏本人产出证据时才换内容减少帮助。完整范句已暴露时，核验题要有未经示范的信息或行动，沿同一冻结标准取证；仅调整语序或称呼不足以排除照写。已经有充分证据就当轮 advance，说明具体依据，不再附加题目。界面会补“这个点本轮过关，可以进入下一点”及下一点是否已知。不得编造未提供的视频片段或测验答案。\n\n同一回合从 point turn（已在资料页提交则用 point packet）取得数据，按下列协议返回一个 JSON 对象。不要输出 Markdown 包装。中文反馈，英语产出题按学习任务书写。除下列键外不用返回其他字段。\n\n作答对象含 kind=\"answer\"，response_result（met/not_met/unknown，评当前提交对本题的完成情况；正确照写范例是辅助成功，不能用它证明独立写作），feedback（给学生的明确反馈，不夹第二题），criteria（对象，键与冻结条件完全一致，每项含 status=met/not_met/unknown、reason、quote，必要时 offset 或此前的 response_id），action=advance/repair/clarify/scaffold/check_variant，reason（此动作的依据），strategy（ASCII 标识，例如 clause_contrast），next。advance 时 next=null；其他动作的 next 含 criteria（仍未解决或证据不足的条件 ID 数组）、question（一个可直接发出的任务）、expected（需要看到什么证据，不作为给学生的参考答案）。若主动给完整示范，把其原文放在单独 example 字段并计入曝光。是否照写以真实已见内容为准，尚有充分的早期证据时勿强制重测。\n\n控制对象只含 kind=\"control\"、control（explain/pause/resume/skip/acknowledge/watched/time_elapsed/change_target/clarify_intent）、feedback（对请求的直接回应）；确需给完整示范时再加 example。控制事件没有学生表现标签。反馈只回答当前请求；不要在控制反馈中藏入新的练习、变式或额外任务。只陈述观看进度、时间或意愿不能判过关。暂停/跳过不用额外出题。\n\n正常聊天的当前模型自己完成这次判断。将完整 decision 和 packet_sha256 交回 point apply（资料页待评时用 point decide）。按验回的反馈与一个问题回复。新问题先是 planned，发到真实助手消息或在资料页实际可见后再确认 delivered。当前回答的 task、point、question、版本及哈希由原生程序验证。\n"
+  },
+  "turns": [
+    {
+      "group": "replay-final",
+      "case": "q97",
+      "turn": 1,
+      "input_text": "{\"binding\": {\"lesson_id\": \"SYN-WORKSHOP\", \"lesson_point_id\": \"VP-STATEMENT\", \"practice_id\": \"7e0b6007-df1e-4b62-8436-be462d2cccae\", \"task_sha256\": \"80fb255a15630fcf64e1b457c7571a2a4a96eb08ac7bb4bd6d5b5779647816bf\", \"rubric_version\": \"1\", \"attempt_id\": \"4568a7032e354e1786ad2987aec8c22b\", \"question_id\": \"7e4bd98482134f5fa33fce3bebd09a99\", \"response_id\": \"e6054314-fbe2-47f7-aea1-06705fa2811c\", \"response_sha256\": \"67539e0ca3f601625b7f8668468b9433f725da7de8d49c4627954ef1fe459fda\", \"revision\": 2}, \"goal\": \"用 unless 给出行动的必要条件。原情境与新的生活情境均适用，具体行动与条件随当前小题而定。\", \"target_kind\": \"specified_form\", \"criteria\": {\"meaning\": {\"required\": true, \"description\": \"保留当前小题的行动与必要条件，不颠倒关系。\", \"evidence\": \"meaning\"}, \"structure\": {\"required\": true, \"description\": \"本人能用 unless 从句配合适当主句，写成完整英文。\", \"evidence\": \"written_form\"}}, \"question\": \"用 unless 告诉音响师：没预约就不能使用录音棚。\", \"question_purpose\": \"parent_output\", \"question_status\": \"sent\", \"classroom_status\": \"needs_practice\", \"answer\": \"请给我一个这个题的完整例句，我想先看例子。\", \"medium\": \"submitted_text\", \"verification\": \"as_submitted\", \"production_origin\": \"human_initial\", \"prior\": [], \"previous_answers\": [], \"help_exposure\": [], \"next_point_known\": false, \"task_scope\": {\"qualified_variants\": [\"用符合本点条件的单句完成任务。\", \"调换信息顺序，同时保持原意并满足本点形式要求。\"], \"counterexamples\": [\"省略决定结论是否成立的限制，或颠倒关系。\"], \"genre_constraint\": \"原意、关系和读者理解优先，不按句长评分。\", \"hint_ladder\": [\"指出当前目标与位置\", \"提供局部方向\", \"按需给例子或建议\"], \"hint_policy\": {}, \"prerequisites\": []}, \"packet_sha256\": \"f4cd35c9f2e36d57fee23c8f0ff260dfc5450571c3fdca16d188244afa87733a\"}",
+      "input_sha256": "d7b9879836aae66fcd11850bfb78d2c928019fa973721ad6107f59e3335bd7d7",
+      "instructions_sha256": "2962719f0ca1c89f0d6da8973e27228131f443b01ce5c71861997a096a6fe403",
+      "actual_output": "{\n  \"kind\": \"control\",\n  \"control\": \"explain\",\n  \"feedback\": \"可以。这里用 unless（除非）引出“有预约”这个必要条件：没预约就不能使用录音棚。\",\n  \"example\": \"You can't use the recording studio unless you have a reservation.\"\n}",
+      "output_sha256": "3fc6ffc1e53795363be499b176043ed6bffdbedd696f41297f9f6f27e42bcaa3",
+      "actual_model": "gpt-6.2-astra",
+      "effort": "max",
+      "requested_service_tier": "ultrafast",
+      "returned_service_tier": "default",
+      "seconds": 4.292,
+      "first_text_seconds": 3.974,
+      "usage": {
+        "input_tokens": 1755,
+        "input_tokens_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": 0,
+          "cache_write_tokens_details": {
+            "ttl_30m_tokens": 0,
+            "ttl_12h_tokens": 0
+          }
+        },
+        "output_tokens": 603,
+        "output_tokens_details": {
+          "reasoning_tokens": 530
+        },
+        "total_tokens": 2358,
+        "attribution": {
+          "items": {
+            "msg_061c94ded66611b7016b010843bdb487d0aa73cd36d35b4511": {
+              "input_tokens": 644,
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "output_tokens": 0,
+              "content": [
+                {
+                  "input_tokens": 644,
+                  "cached_tokens": 0,
+                  "cache_write_tokens": 0,
+                  "output_tokens": 0
+                }
+              ]
+            },
+            "msg_061c94ded66611b7016b010846620487d0a85d2dafc4105f1f": {
+              "input_tokens": 0,
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "output_tokens": 73,
+              "content": [
+                {
+                  "input_tokens": 0,
+                  "cached_tokens": 0,
+                  "cache_write_tokens": 0,
+                  "output_tokens": 73
+                }
+              ]
+            },
+            "rs_061c94ded66611b7016b0108464c8087d0ac08b38e9e00c340": {
+              "input_tokens": 2,
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "output_tokens": 516
+            },
+            "rs_061c94ded66611b7016b01084658e887d0933d6830db046f5d": {
+              "input_tokens": 0,
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "output_tokens": 14
+            }
+          },
+          "request_fields": {
+            "instructions": {
+              "input_tokens": 1109,
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "output_tokens": 0
+            }
+          }
+        }
+      },
+      "committed": true,
+      "classroom_status": "needs_practice",
+      "decision_kind": "control",
+      "action": "explain",
+      "question_after": null
+    },
+    {
+      "group": "replay-final",
+      "case": "q97",
+      "turn": 2,
+      "input_text": "{\"binding\": {\"lesson_id\": \"SYN-WORKSHOP\", \"lesson_point_id\": \"VP-STATEMENT\", \"practice_id\": \"7e0b6007-df1e-4b62-8436-be462d2cccae\", \"task_sha256\": \"80fb255a15630fcf64e1b457c7571a2a4a96eb08ac7bb4bd6d5b5779647816bf\", \"rubric_version\": \"1\", \"attempt_id\": \"4568a7032e354e1786ad2987aec8c22b\", \"question_id\": \"7e4bd98482134f5fa33fce3bebd09a99\", \"response_id\": \"e5cb81d3-635f-4b5d-ae7b-3d4462124cb9\", \"response_sha256\": \"b4648d20e255837448cd9b64465ef23f5a5e47c04b05d18195811f906a230301\", \"revision\": 4}, \"goal\": \"用 unless 给出行动的必要条件。原情境与新的生活情境均适用，具体行动与条件随当前小题而定。\", \"target_kind\": \"specified_form\", \"criteria\": {\"meaning\": {\"required\": true, \"description\": \"保留当前小题的行动与必要条件，不颠倒关系。\", \"evidence\": \"meaning\"}, \"structure\": {\"required\": true, \"description\": \"本人能用 unless 从句配合适当主句，写成完整英文。\", \"evidence\": \"written_form\"}}, \"question\": \"用 unless 告诉音响师：没预约就不能使用录音棚。\", \"question_purpose\": \"parent_output\", \"question_status\": \"sent\", \"classroom_status\": \"needs_practice\", \"answer\": \"You can't use the recording studio unless you have a reservation.\", \"medium\": \"submitted_text\", \"verification\": \"as_submitted\", \"production_origin\": \"ai_or_mixed\", \"prior\": [], \"previous_answers\": [], \"help_exposure\": [{\"support\": \"example\", \"text\": \"You can't use the recording studio unless you have a reservation.\"}], \"next_point_known\": false, \"task_scope\": {\"qualified_variants\": [\"用符合本点条件的单句完成任务。\", \"调换信息顺序，同时保持原意并满足本点形式要求。\"], \"counterexamples\": [\"省略决定结论是否成立的限制，或颠倒关系。\"], \"genre_constraint\": \"原意、关系和读者理解优先，不按句长评分。\", \"hint_ladder\": [\"指出当前目标与位置\", \"提供局部方向\", \"按需给例子或建议\"], \"hint_policy\": {}, \"prerequisites\": []}, \"packet_sha256\": \"85141ffb3d46147806c6d5562b7d531f187d8a499f9bc5edcbe34c569d9b78aa\"}",
+      "input_sha256": "19cac176e5aedf77a0199d1114ea76cea6d08cda59ebc5e59d6b251d7e705919",
+      "instructions_sha256": "2962719f0ca1c89f0d6da8973e27228131f443b01ce5c71861997a096a6fe403",
+      "actual_output": "{\n  \"kind\": \"answer\",\n  \"response_result\": \"met\",\n  \"feedback\": \"这句话的意思和句式都正确：unless 引出“有预约”这个必要条件，说明没预约就不能使用录音棚。不过，整句与给过的范句完全相同，还不能据此确认你能独立运用这个句式。\",\n  \"criteria\": {\n    \"meaning\": {\n      \"status\": \"met\",\n      \"reason\": \"句子保留了“使用录音棚”这一行动，准确说明没有预约就不能使用，没有颠倒条件与行动的关系。\",\n      \"quote\": \"You can't use the recording studio unless you have a reservation.\"\n    },\n    \"structure\": {\n      \"status\": \"unknown\",\n      \"reason\": \"这个 unless 从句与前面的否定主句搭配正确，构成了完整的英文句子。但整句与已见范例逐字相同，且来源标为 AI 或混合产出，不能作为独立写作的充分证据。\",\n      \"quote\": \"unless you have a reservation.\"\n    }\n  },\n  \"action\": \"check_variant\",\n  \"reason\": \"原句无需修改，也没有此前的独立答句可供核验。换一组未经示范的行动和条件，可以检查同一写法。\",\n  \"strategy\": \"independent_context_variant\",\n  \"next\": {\n    \"criteria\": [\"structure\"],\n    \"question\": \"请自己用 unless 写一句完整的英文，提醒朋友：不戴头盔就不能参加这次骑行。\",\n    \"expected\": \"本人写出完整的英文单句，用 unless 从句配合恰当的主句，清楚表达戴头盔是参加这次骑行的必要条件。\"\n  }\n}",
+      "output_sha256": "da0f7c08aa42a0084d0342a3a72f975329ab5f8db93a2727ce6ec5355be4df07",
+      "actual_model": "gpt-6.2-astra",
+      "effort": "max",
+      "requested_service_tier": "ultrafast",
+      "returned_service_tier": "default",
+      "seconds": 19.998,
+      "first_text_seconds": 18.367,
+      "usage": {
+        "input_tokens": 1779,
+        "input_tokens_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": 0,
+          "cache_write_tokens_details": {
+            "ttl_30m_tokens": 0,
+            "ttl_12h_tokens": 0
+          }
+        },
+        "output_tokens": 4058,
+        "output_tokens_details": {
+          "reasoning_tokens": 3664
+        },
+        "total_tokens": 5837,
+        "attribution": {
+          "items": {
+            "msg_09388a6c2104d2ba016b0108485c1887d0a93014a120a1a269": {
+              "input_tokens": 668,
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "output_tokens": 0,
+              "content": [
+                {
+                  "input_tokens": 668,
+                  "cached_tokens": 0,
+                  "cache_write_tokens": 0,
+                  "output_tokens": 0
+                }
+              ]
+            },
+            "msg_09388a6c2104d2ba016b010859a0fc87d0b42008ccd819c38b": {
+              "input_tokens": 0,
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "output_tokens": 394,
+              "content": [
+                {
+                  "input_tokens": 0,
+                  "cached_tokens": 0,
+                  "cache_write_tokens": 0,
+                  "output_tokens": 394
+                }
+              ]
+            },
+            "rs_09388a6c2104d2ba016b01084ad44087d09b8d76bd90a372e6": {
+              "input_tokens": 2,
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "output_tokens": 516
+            },
+            "rs_09388a6c2104d2ba016b01084c4b3087d08fb5ee41b9dd109a": {
+              "input_tokens": 0,
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "output_tokens": 518
+            },
+            "rs_09388a6c2104d2ba016b01084d98cc87d092b4420b7cc362b1": {
+              "input_tokens": 0,
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "output_tokens": 518
+            },
+            "rs_09388a6c2104d2ba016b010850844087d0a920a1fb54b12de2": {
+              "input_tokens": 0,
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "output_tokens": 518
+            },
+            "rs_09388a6c2104d2ba016b010852f86c87d0b4ca5146f6935a8d": {
+              "input_tokens": 0,
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "output_tokens": 518
+            },
+            "rs_09388a6c2104d2ba016b010855d4b887d0a889c92ee29860ee": {
+              "input_tokens": 0,
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "output_tokens": 518
+            },
+            "rs_09388a6c2104d2ba016b0108595fd887d0b7a7ce45f46c8c2c": {
+              "input_tokens": 0,
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "output_tokens": 518
+            },
+            "rs_09388a6c2104d2ba016b010859966487d09baf7abac8aa636b": {
+              "input_tokens": 0,
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "output_tokens": 40
+            }
+          },
+          "request_fields": {
+            "instructions": {
+              "input_tokens": 1109,
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "output_tokens": 0
+            }
+          }
+        }
+      },
+      "committed": true,
+      "classroom_status": "needs_practice",
+      "decision_kind": "answer",
+      "action": "check_variant",
+      "question_after": "请自己用 unless 写一句完整的英文，提醒朋友：不戴头盔就不能参加这次骑行。"
+    },
+    {
+      "group": "replay-final",
+      "case": "q97",
+      "turn": 3,
+      "input_text": "{\"binding\": {\"lesson_id\": \"SYN-WORKSHOP\", \"lesson_point_id\": \"VP-STATEMENT\", \"practice_id\": \"7e0b6007-df1e-4b62-8436-be462d2cccae\", \"task_sha256\": \"80fb255a15630fcf64e1b457c7571a2a4a96eb08ac7bb4bd6d5b5779647816bf\", \"rubric_version\": \"1\", \"attempt_id\": \"4568a7032e354e1786ad2987aec8c22b\", \"question_id\": \"6ce227d4b5f34504b86548c91941b71c\", \"response_id\": \"d30f1710-8c00-4ce3-aefe-bad13f283e8f\", \"response_sha256\": \"50d68e9f552dc34df2c7cab1b4223cb5b0ce12246aac1a113fd487a1e15c2e21\", \"revision\": 6}, \"goal\": \"用 unless 给出行动的必要条件。原情境与新的生活情境均适用，具体行动与条件随当前小题而定。\", \"target_kind\": \"specified_form\", \"criteria\": {\"meaning\": {\"required\": true, \"description\": \"保留当前小题的行动与必要条件，不颠倒关系。\", \"evidence\": \"meaning\"}, \"structure\": {\"required\": true, \"description\": \"本人能用 unless 从句配合适当主句，写成完整英文。\", \"evidence\": \"written_form\"}}, \"question\": \"请自己用 unless 写一句完整的英文，提醒朋友：不戴头盔就不能参加这次骑行。\", \"question_purpose\": \"parent_output\", \"question_status\": \"sent\", \"classroom_status\": \"needs_practice\", \"answer\": \"You can't join this ride unless you wear a helmet.\", \"medium\": \"submitted_text\", \"verification\": \"as_submitted\", \"production_origin\": \"human_revision\", \"prior\": [{\"id\": \"0eaf0f2c-49eb-411b-a8ab-62f767b595f9\", \"at\": \"2026-11-21T02:56:27.497010+00:00\", \"binding\": {\"lesson_id\": \"SYN-WORKSHOP\", \"lesson_point_id\": \"VP-STATEMENT\", \"practice_id\": \"7e0b6007-df1e-4b62-8436-be462d2cccae\", \"task_sha256\": \"80fb255a15630fcf64e1b457c7571a2a4a96eb08ac7bb4bd6d5b5779647816bf\", \"rubric_version\": \"1\", \"attempt_id\": \"4568a7032e354e1786ad2987aec8c22b\", \"question_id\": \"7e4bd98482134f5fa33fce3bebd09a99\", \"response_id\": \"e5cb81d3-635f-4b5d-ae7b-3d4462124cb9\", \"response_sha256\": \"b4648d20e255837448cd9b64465ef23f5a5e47c04b05d18195811f906a230301\", \"revision\": 4}, \"criteria\": {\"meaning\": {\"status\": \"met\", \"reason\": \"句子保留了“使用录音棚”这一行动，准确说明没有预约就不能使用，没有颠倒条件与行动的关系。\", \"anchor\": {\"draft_id\": \"e5cb81d3-635f-4b5d-ae7b-3d4462124cb9\", \"draft_sha256\": \"b4648d20e255837448cd9b64465ef23f5a5e47c04b05d18195811f906a230301\", \"offset\": 0, \"length\": 65, \"quote\": \"You can't use the recording studio unless you have a reservation.\", \"offset_unit\": \"unicode_codepoint\", \"paragraph\": 1, \"before\": \"\", \"after\": \"\"}, \"response_id\": \"e5cb81d3-635f-4b5d-ae7b-3d4462124cb9\"}, \"structure\": {\"status\": \"unknown\", \"reason\": \"这个 unless 从句与前面的否定主句搭配正确，构成了完整的英文句子。但整句与已见范例逐字相同，且来源标为 AI 或混合产出，不能作为独立写作的充分证据。\", \"anchor\": {\"draft_id\": \"e5cb81d3-635f-4b5d-ae7b-3d4462124cb9\", \"draft_sha256\": \"b4648d20e255837448cd9b64465ef23f5a5e47c04b05d18195811f906a230301\", \"offset\": 35, \"length\": 30, \"quote\": \"unless you have a reservation.\", \"offset_unit\": \"unicode_codepoint\", \"paragraph\": 1, \"before\": \"se the recording studio \", \"after\": \"\"}, \"response_id\": \"e5cb81d3-635f-4b5d-ae7b-3d4462124cb9\"}}, \"unresolved\": [\"structure\", \"meaning\"], \"action\": \"check_variant\", \"response_result\": \"met\", \"production_evidence\": \"assisted_success\", \"reason\": \"原句无需修改，也没有此前的独立答句可供核验。换一组未经示范的行动和条件，可以检查同一写法。\", \"strategy\": \"independent_context_variant\", \"feedback\": \"这句话的意思和句式都正确：unless 引出“有预约”这个必要条件，说明没预约就不能使用录音棚。不过，整句与给过的范句完全相同，还不能据此确认你能独立运用这个句式。\", \"next\": {\"id\": \"6ce227d4b5f34504b86548c91941b71c\", \"purpose\": \"parent_output\", \"created_at\": \"2026-11-21T02:56:27.497010+00:00\", \"text\": \"请自己用 unless 写一句完整的英文，提醒朋友：不戴头盔就不能参加这次骑行。\", \"criteria\": [\"structure\"], \"reason\": \"原句无需修改，也没有此前的独立答句可供核验。换一组未经示范的行动和条件，可以检查同一写法。\", \"expected\": \"本人写出完整的英文单句，用 unless 从句配合恰当的主句，清楚表达戴头盔是参加这次骑行的必要条件。\", \"source_response\": \"e5cb81d3-635f-4b5d-ae7b-3d4462124cb9\", \"status\": \"planned\"}, \"status\": \"needs_practice\", \"support_blocked\": [\"meaning\"]}], \"previous_answers\": [{\"response_id\": \"e5cb81d3-635f-4b5d-ae7b-3d4462124cb9\", \"text\": \"You can't use the recording studio unless you have a reservation.\", \"production_origin\": \"ai_or_mixed\"}], \"help_exposure\": [{\"support\": \"example\", \"text\": \"You can't use the recording studio unless you have a reservation.\"}, {\"support\": \"hint\", \"text\": \"这句话的意思和句式都正确：unless 引出“有预约”这个必要条件，说明没预约就不能使用录音棚。不过，整句与给过的范句完全相同，还不能据此确认你能独立运用这个句式。\"}], \"next_point_known\": false, \"task_scope\": {\"qualified_variants\": [\"用符合本点条件的单句完成任务。\", \"调换信息顺序，同时保持原意并满足本点形式要求。\"], \"counterexamples\": [\"省略决定结论是否成立的限制，或颠倒关系。\"], \"genre_constraint\": \"原意、关系和读者理解优先，不按句长评分。\", \"hint_ladder\": [\"指出当前目标与位置\", \"提供局部方向\", \"按需给例子或建议\"], \"hint_policy\": {}, \"prerequisites\": []}, \"packet_sha256\": \"ee449319ad904d05a46db442104829b87131f30c5204c5a4e5e6805339e4e4a2\"}",
+      "input_sha256": "179c311621eda9fd7552a3de1c727e3db6f2e57b61ba17cbc3ce91e0d177a838",
+      "instructions_sha256": "2962719f0ca1c89f0d6da8973e27228131f443b01ce5c71861997a096a6fe403",
+      "actual_output": "{\n  \"kind\": \"answer\",\n  \"response_result\": \"met\",\n  \"feedback\": \"你准确表达了“不戴头盔就不能参加这次骑行”。主句用 can't 表示限制，unless 从句用肯定形式写出必要条件：戴头盔。\",\n  \"criteria\": {\n    \"meaning\": {\n      \"status\": \"met\",\n      \"reason\": \"受限制的行动是参加这次骑行，必要条件是戴头盔；条件和行动的关系没有写反。\",\n      \"quote\": \"You can't join this ride unless you wear a helmet.\"\n    },\n    \"structure\": {\n      \"status\": \"met\",\n      \"reason\": \"unless 引出的从句有主语 you 和谓语 wear，与前面的否定主句搭配，构成完整的英文句子。\",\n      \"quote\": \"unless you wear a helmet.\"\n    }\n  },\n  \"action\": \"advance\",\n  \"reason\": \"本轮答句不是照写录音棚范句，而是用指定句式表达了未经示范的新行动和新条件，已提供充分的本人书面产出证据。\",\n  \"strategy\": \"confirm_independent_variant\",\n  \"next\": null\n}",
+      "output_sha256": "84c57953bb12900efd1986a44e6cbacfab4af5fb0bbcd84e04a182b8de763e31",
+      "actual_model": "gpt-6.2-astra",
+      "effort": "max",
+      "requested_service_tier": "ultrafast",
+      "returned_service_tier": "default",
+      "seconds": 10.545,
+      "first_text_seconds": 10.232,
+      "usage": {
+        "input_tokens": 3020,
+        "input_tokens_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": 0,
+          "cache_write_tokens_details": {
+            "ttl_30m_tokens": 0,
+            "ttl_12h_tokens": 0
+          }
+        },
+        "output_tokens": 1199,
+        "output_tokens_details": {
+          "reasoning_tokens": 929
+        },
+        "total_tokens": 4219,
+        "attribution": {
+          "items": {
+            "msg_00c85bc0815c36cb016b01089b6ecc87d0af4efef34f5bb9be": {
+              "input_tokens": 1909,
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "output_tokens": 0,
+              "content": [
+                {
+                  "input_tokens": 1909,
+                  "cached_tokens": 0,
+                  "cache_write_tokens": 0,
+                  "output_tokens": 0
+                }
+              ]
+            },
+            "msg_00c85bc0815c36cb016b0108a1b37c87d09fe4842e7185962b": {
+              "input_tokens": 0,
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "output_tokens": 270,
+              "content": [
+                {
+                  "input_tokens": 0,
+                  "cached_tokens": 0,
+                  "cache_write_tokens": 0,
+                  "output_tokens": 270
+                }
+              ]
+            },
+            "rs_00c85bc0815c36cb016b01089edf0887d092b9eebd286b1aa9": {
+              "input_tokens": 2,
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "output_tokens": 516
+            },
+            "rs_00c85bc0815c36cb016b0108a1b39487d0ac1009d0e088f508": {
+              "input_tokens": 0,
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "output_tokens": 413
+            }
+          },
+          "request_fields": {
+            "instructions": {
+              "input_tokens": 1109,
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "output_tokens": 0
+            }
+          }
+        }
+      },
+      "committed": true,
+      "classroom_status": "ready_for_next",
+      "decision_kind": "answer",
+      "action": "advance",
+      "question_after": null
+    },
+    {
+      "group": "acceptance",
+      "case": "r04",
+      "turn": 1,
+      "input_text": "{\"binding\": {\"lesson_id\": \"SYN-WORKSHOP\", \"lesson_point_id\": \"VP-LIMIT\", \"practice_id\": \"9980c00d-4169-4b91-a158-215609dfebf6\", \"task_sha256\": \"57cccc1947ae51b9823d0f6c995a78872a8bf7596d7e96fcd1ee32ce872eb940\", \"rubric_version\": \"1\", \"attempt_id\": \"c97f3f8aac044a9fad85a2728ea2483f\", \"question_id\": \"5e5707f0ca50448289bcf058f1ea1762\", \"response_id\": \"b6373972-b77f-4c52-a7c5-39134f2c965f\", \"response_sha256\": \"82b3b3ef566ac1eb932415eb6e14c7929963843e540a79341c2712a6b5ccde3d\", \"revision\": 2}, \"goal\": \"用 unless 说明进入恒温室的必要条件，保留有通行证才可以进入的原意。\", \"target_kind\": \"specified_form\", \"criteria\": {\"condition\": {\"required\": true, \"description\": \"明确表达没有有效通行证就不能进入恒温室，条件方向正确。\", \"evidence\": \"meaning\"}, \"structure\": {\"required\": true, \"description\": \"使用 unless 引导条件从句，主从句连接与否定相配。\", \"evidence\": \"written_form\"}}, \"question\": \"请用 unless 写一句话，告诉访客没有有效通行证就不能进入恒温室。\", \"question_purpose\": \"parent_output\", \"question_status\": \"sent\", \"classroom_status\": \"needs_practice\", \"answer\": \"A visitor cannot enter the climate-controlled room unless they hold a valid pass.\", \"medium\": \"submitted_text\", \"verification\": \"as_submitted\", \"production_origin\": \"human_initial\", \"prior\": [], \"previous_answers\": [], \"help_exposure\": [], \"next_point_known\": false, \"task_scope\": {\"qualified_variants\": [\"用符合本点条件的单句完成任务。\", \"调换信息顺序，同时保持原意并满足本点形式要求。\"], \"counterexamples\": [\"省略决定结论是否成立的限制，或颠倒关系。\"], \"genre_constraint\": \"原意、关系和读者理解优先，不按句长评分。\", \"hint_ladder\": [\"指出当前目标与位置\", \"提供局部方向\", \"按需给例子或建议\"], \"hint_policy\": {}, \"prerequisites\": []}, \"packet_sha256\": \"fd2b9ee9d45ff2083140712cdfa94916c3f83d53efdd0d4f3cd6de6ac34eccd8\"}",
+      "input_sha256": "5a0cd60330848cfc93f56a59a37689c39ae30e9fe71e20d03a12f0cc7827a4e5",
+      "instructions_sha256": "2962719f0ca1c89f0d6da8973e27228131f443b01ce5c71861997a096a6fe403",
+      "actual_output": "{\n  \"kind\": \"answer\",\n  \"response_result\": \"met\",\n  \"feedback\": \"你把否定放在主句的 “cannot enter” 中，用 unless 引出持证条件，准确表达了“没有有效通行证就不能进入恒温室”。\",\n  \"criteria\": {\n    \"condition\": {\n      \"status\": \"met\",\n      \"reason\": \"句子说明有效通行证是访客进入恒温室的必要条件：没有有效通行证就不能进入。\",\n      \"quote\": \"A visitor cannot enter the climate-controlled room unless they hold a valid pass.\"\n    },\n    \"structure\": {\n      \"status\": \"met\",\n      \"reason\": \"unless 引导肯定形式的条件从句，与主句中的 cannot enter 正确搭配。\",\n      \"quote\": \"unless they hold a valid pass.\"\n    }\n  },\n  \"action\": \"advance\",\n  \"reason\": \"本次独立提交的句子既表达了正确的条件关系，也使用了指定的 unless 结构。\",\n  \"strategy\": \"meaning_form_check\",\n  \"next\": null\n}",
+      "output_sha256": "c8ec670907d82a4675c0f361f9c7c8d4335491a9a31f8165b11fdba7a8b62b75",
+      "actual_model": "gpt-6.2-astra",
+      "effort": "max",
+      "requested_service_tier": "ultrafast",
+      "returned_service_tier": "default",
+      "seconds": 10.57,
+      "first_text_seconds": 7.903,
+      "usage": {
+        "input_tokens": 1750,
+        "input_tokens_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": 0,
+          "cache_write_tokens_details": {
+            "ttl_30m_tokens": 0,
+            "ttl_12h_tokens": 0
+          }
+        },
+        "output_tokens": 1120,
+        "output_tokens_details": {
+          "reasoning_tokens": 877
+        },
+        "total_tokens": 2870,
+        "attribution": {
+          "items": {
+            "msg_0e4a907628824674016b0109d4a7e487d08e6b3eb855406316": {
+              "input_tokens": 639,
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "output_tokens": 0,
+              "content": [
+                {
+                  "input_tokens": 639,
+                  "cached_tokens": 0,
+                  "cache_write_tokens": 0,
+                  "output_tokens": 0
+                }
+              ]
+            },
+            "msg_0e4a907628824674016b0109db673887d0895559c03f14bc3f": {
+              "input_tokens": 0,
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "output_tokens": 243,
+              "content": [
+                {
+                  "input_tokens": 0,
+                  "cached_tokens": 0,
+                  "cache_write_tokens": 0,
+                  "output_tokens": 243
+                }
+              ]
+            },
+            "rs_0e4a907628824674016b0109d911e087d0aa5b62a9849f6a97": {
+              "input_tokens": 2,
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "output_tokens": 516
+            },
+            "rs_0e4a907628824674016b0109db674087d0be7c70ebf9a633c7": {
+              "input_tokens": 0,
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "output_tokens": 361
+            }
+          },
+          "request_fields": {
+            "instructions": {
+              "input_tokens": 1109,
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "output_tokens": 0
+            }
+          }
+        }
+      },
+      "committed": true,
+      "classroom_status": "ready_for_next",
+      "decision_kind": "answer",
+      "action": "advance",
+      "question_after": null
+    },
+    {
+      "group": "acceptance",
+      "case": "r12",
+      "turn": 1,
+      "input_text": "{\"binding\": {\"lesson_id\": \"SYN-WORKSHOP\", \"lesson_point_id\": \"VP-CONTRAST\", \"practice_id\": \"7aa04656-b963-4ad1-b074-ba371e058a61\", \"task_sha256\": \"bc0b06959c1ca9180d2226cf6f8c9d148f4ea6ea64817e6e9c8601237d60d7d1\", \"rubric_version\": \"1\", \"attempt_id\": \"f41a5776dcb54ca792dcce712950141b\", \"question_id\": \"3868ea8446d14c0397b464d888d574ed\", \"response_id\": \"210b7055-5a85-4cec-9b09-2bd167830c35\", \"response_sha256\": \"a922d8f627c20c25089f7a853f334c8951595448ba455c0a21a419bb72d60f16\", \"revision\": 2}, \"goal\": \"用自然英语保留两项事实，表达表面优势与实际限制的让步关系，不指定连接词。\", \"target_kind\": \"function\", \"criteria\": {\"meaning\": {\"required\": true, \"description\": \"保留远端讲座回放方便且缺少现场互动两项信息。\", \"evidence\": \"meaning\"}, \"link\": {\"required\": true, \"description\": \"清楚地表达预期落差或转折，不把一方写成另一方的原因。\", \"evidence\": \"meaning\"}}, \"question\": \"用英语给同学说明：远端讲座可以随时回看，不过缺少现场互动。请你自己组织表达。\", \"question_purpose\": \"parent_output\", \"question_status\": \"sent\", \"classroom_status\": \"needs_practice\", \"answer\": \"Replaying a remote lecture is easy; the drawback is how few chances it offers for live interaction.\", \"medium\": \"submitted_text\", \"verification\": \"as_submitted\", \"production_origin\": \"human_initial\", \"prior\": [], \"previous_answers\": [], \"help_exposure\": [], \"next_point_known\": false, \"task_scope\": {\"qualified_variants\": [\"用符合本点条件的单句完成任务。\", \"调换信息顺序，同时保持原意并满足本点形式要求。\"], \"counterexamples\": [\"省略决定结论是否成立的限制，或颠倒关系。\"], \"genre_constraint\": \"原意、关系和读者理解优先，不按句长评分。\", \"hint_ladder\": [\"指出当前目标与位置\", \"提供局部方向\", \"按需给例子或建议\"], \"hint_policy\": {}, \"prerequisites\": []}, \"packet_sha256\": \"9da8b81c9b7dfe6afd5f880711bb53781c35cc3ccd8568df2dd11146324b0533\"}",
+      "input_sha256": "de07e994e0f5adceada89700b29e805386b6a8fb3c7da9d947685265c3f17301",
+      "instructions_sha256": "2962719f0ca1c89f0d6da8973e27228131f443b01ce5c71861997a096a6fe403",
+      "actual_output": "{\n  \"kind\": \"answer\",\n  \"response_result\": \"met\",\n  \"feedback\": \"你写清了远端讲座回看方便、现场互动机会少这两项事实。“the drawback”点明后一项是与前面优势相对的局限，不必再加 “but”。\",\n  \"criteria\": {\n    \"meaning\": {\n      \"status\": \"met\",\n      \"reason\": \"前半句说明回看远端讲座很容易，后半句说明现场互动的机会很少。\",\n      \"quote\": \"Replaying a remote lecture is easy; the drawback is how few chances it offers for live interaction.\"\n    },\n    \"link\": {\n      \"status\": \"met\",\n      \"reason\": \"分号后的“the drawback”把读者从回看的便利引向互动上的不足，表达的是转折而不是因果。\",\n      \"quote\": \"easy; the drawback is\"\n    }\n  },\n  \"action\": \"advance\",\n  \"reason\": \"独立提交的句子已保留两项事实，并清楚表达了优势与局限的对照。\",\n  \"strategy\": \"clause_contrast\",\n  \"next\": null\n}",
+      "output_sha256": "f218f3e7f85a4616901b449974cac845b2ebfbee8da4983fe5d18a143b8f83ca",
+      "actual_model": "gpt-6.2-astra",
+      "effort": "max",
+      "requested_service_tier": "ultrafast",
+      "returned_service_tier": "default",
+      "seconds": 10.897,
+      "first_text_seconds": 8.264,
+      "usage": {
+        "input_tokens": 1758,
+        "input_tokens_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": 0,
+          "cache_write_tokens_details": {
+            "ttl_30m_tokens": 0,
+            "ttl_12h_tokens": 0
+          }
+        },
+        "output_tokens": 1228,
+        "output_tokens_details": {
+          "reasoning_tokens": 967
+        },
+        "total_tokens": 2986,
+        "attribution": {
+          "items": {
+            "msg_0e25ccaf15d4f9a5016b0109e0223487d0aec371c6ee1d668d": {
+              "input_tokens": 647,
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "output_tokens": 0,
+              "content": [
+                {
+                  "input_tokens": 647,
+                  "cached_tokens": 0,
+                  "cache_write_tokens": 0,
+                  "output_tokens": 0
+                }
+              ]
+            },
+            "msg_0e25ccaf15d4f9a5016b0109e7024487d080c6c34682fa50b9": {
+              "input_tokens": 0,
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "output_tokens": 261,
+              "content": [
+                {
+                  "input_tokens": 0,
+                  "cached_tokens": 0,
+                  "cache_write_tokens": 0,
+                  "output_tokens": 261
+                }
+              ]
+            },
+            "rs_0e25ccaf15d4f9a5016b0109e4112087d09f4fee23b49fba5f": {
+              "input_tokens": 2,
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "output_tokens": 516
+            },
+            "rs_0e25ccaf15d4f9a5016b0109e7025c87d0ad4720b24936c702": {
+              "input_tokens": 0,
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "output_tokens": 451
+            }
+          },
+          "request_fields": {
+            "instructions": {
+              "input_tokens": 1109,
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "output_tokens": 0
+            }
+          }
+        }
+      },
+      "committed": true,
+      "classroom_status": "ready_for_next",
+      "decision_kind": "answer",
+      "action": "advance",
+      "question_after": null
+    },
+    {
+      "group": "acceptance",
+      "case": "r16",
+      "turn": 1,
+      "input_text": "{\"binding\": {\"lesson_id\": \"SYN-WORKSHOP\", \"lesson_point_id\": \"VP-CONTRAST\", \"practice_id\": \"d832ca35-827f-4c31-ada8-faacfc9baf04\", \"task_sha256\": \"2fa44a95a1e51a5bc3ee15f2cca14261415fea75d7467ab94e533579edea6c25\", \"rubric_version\": \"1\", \"attempt_id\": \"00f0227d086d4ab1a9d52c41b67da4c3\", \"question_id\": \"91019d904ca04a81a3a23f39583de555\", \"response_id\": \"6718d8c0-f238-4697-855b-5d0f01866371\", \"response_sha256\": \"b31cc07fcfa817a796871518727cc1472d34a24bcd729d0d69b5dcf3b672911f\", \"revision\": 2}, \"goal\": \"用自然英语保留两项事实，表达表面优势与实际限制的让步关系，不指定连接词。\", \"target_kind\": \"function\", \"criteria\": {\"meaning\": {\"required\": true, \"description\": \"保留远端讲座回放方便且缺少现场互动两项信息。\", \"evidence\": \"meaning\"}, \"link\": {\"required\": true, \"description\": \"清楚地表达预期落差或转折，不把一方写成另一方的原因。\", \"evidence\": \"meaning\"}}, \"question\": \"用英语给同学说明：远端讲座可以随时回看，不过缺少现场互动。请你自己组织表达。\", \"question_purpose\": \"parent_output\", \"question_status\": \"sent\", \"classroom_status\": \"needs_practice\", \"answer\": \"Remote lectures are handy when you want to listen again, though they lack the live exchange of an in-person class.\", \"medium\": \"submitted_text\", \"verification\": \"as_submitted\", \"production_origin\": \"human_initial\", \"prior\": [], \"previous_answers\": [], \"help_exposure\": [], \"next_point_known\": false, \"task_scope\": {\"qualified_variants\": [\"用符合本点条件的单句完成任务。\", \"调换信息顺序，同时保持原意并满足本点形式要求。\"], \"counterexamples\": [\"省略决定结论是否成立的限制，或颠倒关系。\"], \"genre_constraint\": \"原意、关系和读者理解优先，不按句长评分。\", \"hint_ladder\": [\"指出当前目标与位置\", \"提供局部方向\", \"按需给例子或建议\"], \"hint_policy\": {}, \"prerequisites\": []}, \"packet_sha256\": \"d8d7ee12841e0084b8af964a691e4466716938c2ef452e10f747bb1b7b52de96\"}",
+      "input_sha256": "e971876ab1c65c359ac76d0851da3f60388ddf50a4fd59766591148286a7611f",
+      "instructions_sha256": "2962719f0ca1c89f0d6da8973e27228131f443b01ce5c71861997a096a6fe403",
+      "actual_output": "{\n  \"kind\": \"answer\",\n  \"response_result\": \"met\",\n  \"feedback\": \"你先写出远端讲座想重听时很方便，再用 though 点出它缺少面授课那样的现场交流。回听的好处和互动上的限制都很清楚，转折也自然。\",\n  \"criteria\": {\n    \"meaning\": {\n      \"status\": \"met\",\n      \"reason\": \"前半句说明想再听时回听很方便，后半句说明远端讲座缺少面授课堂的现场交流，保留了两项事实。\",\n      \"quote\": \"Remote lectures are handy when you want to listen again, though they lack the live exchange of an in-person class.\"\n    },\n    \"link\": {\n      \"status\": \"met\",\n      \"reason\": \"though 引出互动不足这一限制，与前面的回听便利形成对照，没有把一项写成另一项的原因。\",\n      \"quote\": \"though they lack the live exchange of an in-person class.\"\n    }\n  },\n  \"action\": \"advance\",\n  \"reason\": \"这次独立作答已充分展示两项事实及其让步关系，无需补写。\",\n  \"strategy\": \"clause_contrast\",\n  \"next\": null\n}",
+      "output_sha256": "aa835a356fd7aa215a5a3a92a02a86d28a38dde14ae71fb98e5bd6e64d3fb3ed",
+      "actual_model": "gpt-6.2-astra",
+      "effort": "max",
+      "requested_service_tier": "ultrafast",
+      "returned_service_tier": "default",
+      "seconds": 8.106,
+      "first_text_seconds": 7.141,
+      "usage": {
+        "input_tokens": 1764,
+        "input_tokens_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": 0,
+          "cache_write_tokens_details": {
+            "ttl_30m_tokens": 0,
+            "ttl_12h_tokens": 0
+          }
+        },
+        "output_tokens": 1291,
+        "output_tokens_details": {
+          "reasoning_tokens": 1009
+        },
+        "total_tokens": 3055,
+        "attribution": {
+          "items": {
+            "msg_08a7761b2bac3d1e016b0109eba92c87d095549dcbbfb7d9de": {
+              "input_tokens": 653,
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "output_tokens": 0,
+              "content": [
+                {
+                  "input_tokens": 653,
+                  "cached_tokens": 0,
+                  "cache_write_tokens": 0,
+                  "output_tokens": 0
+                }
+              ]
+            },
+            "msg_08a7761b2bac3d1e016b0109f1709087d0a6b81276305e6d13": {
+              "input_tokens": 0,
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "output_tokens": 282,
+              "content": [
+                {
+                  "input_tokens": 0,
+                  "cached_tokens": 0,
+                  "cache_write_tokens": 0,
+                  "output_tokens": 282
+                }
+              ]
+            },
+            "rs_08a7761b2bac3d1e016b0109eefc7887d08f7b2497fb07ec96": {
+              "input_tokens": 2,
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "output_tokens": 516
+            },
+            "rs_08a7761b2bac3d1e016b0109f170a487d0b791ec3e90a1317f": {
+              "input_tokens": 0,
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "output_tokens": 493
+            }
+          },
+          "request_fields": {
+            "instructions": {
+              "input_tokens": 1109,
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "output_tokens": 0
+            }
+          }
+        }
+      },
+      "committed": true,
+      "classroom_status": "ready_for_next",
+      "decision_kind": "answer",
+      "action": "advance",
+      "question_after": null
+    },
+    {
+      "group": "acceptance",
+      "case": "r21",
+      "turn": 1,
+      "input_text": "{\"binding\": {\"lesson_id\": \"SYN-WORKSHOP\", \"lesson_point_id\": \"VP-LIMIT\", \"practice_id\": \"f8da7498-254e-475a-93ae-3ddf109f9abd\", \"task_sha256\": \"a11ad49f5f74e743198264d4ea8b4c672189bc7d2f23210a04c02add3c15113a\", \"rubric_version\": \"1\", \"attempt_id\": \"6973f2cf3b20482e9a483c29651143b9\", \"question_id\": \"a124589cd1c145f9b31f60650d196b19\", \"response_id\": \"2732fa86-c580-4b96-af0c-64ba64665f12\", \"response_sha256\": \"9f6be501fb18655668bf7fe9966ed073f09cec6ff94acee44f412ce8bd4b1b5c\", \"revision\": 2}, \"goal\": \"用 unless 说明进入恒温室的必要条件，保留有通行证才可以进入的原意。\", \"target_kind\": \"specified_form\", \"criteria\": {\"condition\": {\"required\": true, \"description\": \"明确表达没有有效通行证就不能进入恒温室，条件方向正确。\", \"evidence\": \"meaning\"}, \"structure\": {\"required\": true, \"description\": \"使用 unless 引导条件从句，主从句连接与否定相配。\", \"evidence\": \"written_form\"}}, \"question\": \"请用 unless 写一句话，告诉访客没有有效通行证就不能进入恒温室。\", \"question_purpose\": \"parent_output\", \"question_status\": \"sent\", \"classroom_status\": \"needs_practice\", \"answer\": \"Only visitors who hold a valid pass can enter the climate-controlled room.\", \"medium\": \"submitted_text\", \"verification\": \"as_submitted\", \"production_origin\": \"human_initial\", \"prior\": [], \"previous_answers\": [], \"help_exposure\": [], \"next_point_known\": false, \"task_scope\": {\"qualified_variants\": [\"用符合本点条件的单句完成任务。\", \"调换信息顺序，同时保持原意并满足本点形式要求。\"], \"counterexamples\": [\"省略决定结论是否成立的限制，或颠倒关系。\"], \"genre_constraint\": \"原意、关系和读者理解优先，不按句长评分。\", \"hint_ladder\": [\"指出当前目标与位置\", \"提供局部方向\", \"按需给例子或建议\"], \"hint_policy\": {}, \"prerequisites\": []}, \"packet_sha256\": \"f39ea06d0219021c2075737f271e66ee3022f89c299df88a565c9c96fe9ee1bd\"}",
+      "input_sha256": "b6587e200c1c8655629197e6cf594fe78af049da8de51233b2a906b50bcec780",
+      "instructions_sha256": "2962719f0ca1c89f0d6da8973e27228131f443b01ce5c71861997a096a6fe403",
+      "actual_output": "{\n  \"kind\": \"answer\",\n  \"response_result\": \"not_met\",\n  \"feedback\": \"你写清了“只有持有效通行证的访客才能进入恒温室”，条件方向正确。原句用 Only 限定谁能进入，还没有用题目指定的 unless 引出条件。\",\n  \"criteria\": {\n    \"condition\": {\n      \"status\": \"met\",\n      \"reason\": \"Only 把能进入恒温室的访客限定为持有效通行证的人，因此没有有效通行证就不能进入。\",\n      \"quote\": \"Only visitors who hold a valid pass can enter the climate-controlled room.\"\n    },\n    \"structure\": {\n      \"status\": \"not_met\",\n      \"reason\": \"who 引导的是修饰 visitors 的定语从句，不是 unless 引导的条件从句。\",\n      \"quote\": \"who hold a valid pass\"\n    }\n  },\n  \"action\": \"repair\",\n  \"reason\": \"原句已准确表达必要条件，只需改写条件结构。\",\n  \"strategy\": \"targeted_clause_rewrite\",\n  \"next\": {\n    \"criteria\": [\"structure\"],\n    \"question\": \"请把原句改写成一个英文句子：主句表达访客“不能进入恒温室”，用 unless 引出“持有有效通行证”这一条件。\",\n    \"expected\": \"本人写出的单句中，表示不能进入的主句与表示持有有效通行证的 unless 从句相配，原意不变。\"\n  }\n}",
+      "output_sha256": "2205cc95b7be48aa9fefe91e2649f83e15c6382b978ca888ee0304a0ee285657",
+      "actual_model": "gpt-6.2-astra",
+      "effort": "max",
+      "requested_service_tier": "ultrafast",
+      "returned_service_tier": "default",
+      "seconds": 7.821,
+      "first_text_seconds": 6.684,
+      "usage": {
+        "input_tokens": 1745,
+        "input_tokens_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": 0,
+          "cache_write_tokens_details": {
+            "ttl_30m_tokens": 0,
+            "ttl_12h_tokens": 0
+          }
+        },
+        "output_tokens": 1292,
+        "output_tokens_details": {
+          "reasoning_tokens": 956
+        },
+        "total_tokens": 3037,
+        "attribution": {
+          "items": {
+            "msg_0fccb6afdfce9a60016b0109f47e4c87d0b14ead73bbfd494f": {
+              "input_tokens": 634,
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "output_tokens": 0,
+              "content": [
+                {
+                  "input_tokens": 634,
+                  "cached_tokens": 0,
+                  "cache_write_tokens": 0,
+                  "output_tokens": 0
+                }
+              ]
+            },
+            "msg_0fccb6afdfce9a60016b0109f9e32487d0b9c46518fe8d57c1": {
+              "input_tokens": 0,
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "output_tokens": 336,
+              "content": [
+                {
+                  "input_tokens": 0,
+                  "cached_tokens": 0,
+                  "cache_write_tokens": 0,
+                  "output_tokens": 336
+                }
+              ]
+            },
+            "rs_0fccb6afdfce9a60016b0109f7669487d0b9daf0ad7d9e2145": {
+              "input_tokens": 2,
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "output_tokens": 516
+            },
+            "rs_0fccb6afdfce9a60016b0109f9e34087d0a83483571cd68f3d": {
+              "input_tokens": 0,
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "output_tokens": 440
+            }
+          },
+          "request_fields": {
+            "instructions": {
+              "input_tokens": 1109,
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "output_tokens": 0
+            }
+          }
+        }
+      },
+      "committed": true,
+      "classroom_status": "needs_practice",
+      "decision_kind": "answer",
+      "action": "repair",
+      "question_after": "请把原句改写成一个英文句子：主句表达访客“不能进入恒温室”，用 unless 引出“持有有效通行证”这一条件。"
+    },
+    {
+      "group": "acceptance",
+      "case": "r29",
+      "turn": 1,
+      "input_text": "{\"binding\": {\"lesson_id\": \"SYN-WORKSHOP\", \"lesson_point_id\": \"VP-LIMIT\", \"practice_id\": \"b315aa68-c20c-47c2-84d4-63e398a725ef\", \"task_sha256\": \"70c0fe0dbccfd7d89a1ee8904f89f94e6a24a15c4b69e0f347929958c8dce594\", \"rubric_version\": \"1\", \"attempt_id\": \"6a14cc1a13c94a42950cb37e1269274b\", \"question_id\": \"98d35cec110f49c5bd6a8948b72103d3\", \"response_id\": \"ac6cfb18-ca07-41c6-a42e-8acba0a676a4\", \"response_sha256\": \"34506d79a383d2cb915b815b9d3213da1dc846cc29cf6857b8437030a58b3076\", \"revision\": 2}, \"goal\": \"用 unless 说明进入恒温室的必要条件，保留有通行证才可以进入的原意。\", \"target_kind\": \"specified_form\", \"criteria\": {\"condition\": {\"required\": true, \"description\": \"明确表达没有有效通行证就不能进入恒温室，条件方向正确。\", \"evidence\": \"meaning\"}, \"structure\": {\"required\": true, \"description\": \"使用 unless 引导条件从句，主从句连接与否定相配。\", \"evidence\": \"written_form\"}}, \"question\": \"请用 unless 写一句话，告诉访客没有有效通行证就不能进入恒温室。\", \"question_purpose\": \"parent_output\", \"question_status\": \"sent\", \"classroom_status\": \"needs_practice\", \"answer\": \"Unless the visitor holds a valid pass, so they cannot enter the climate-controlled room.\", \"medium\": \"submitted_text\", \"verification\": \"as_submitted\", \"production_origin\": \"human_initial\", \"prior\": [], \"previous_answers\": [], \"help_exposure\": [], \"next_point_known\": false, \"task_scope\": {\"qualified_variants\": [\"用符合本点条件的单句完成任务。\", \"调换信息顺序，同时保持原意并满足本点形式要求。\"], \"counterexamples\": [\"省略决定结论是否成立的限制，或颠倒关系。\"], \"genre_constraint\": \"原意、关系和读者理解优先，不按句长评分。\", \"hint_ladder\": [\"指出当前目标与位置\", \"提供局部方向\", \"按需给例子或建议\"], \"hint_policy\": {}, \"prerequisites\": []}, \"packet_sha256\": \"186e6979eea98161b080586e7e8291eab19da0774376060356580298ac9fb4f4\"}",
+      "input_sha256": "99ec1060656e98d08b90828d9757ba25f851a1a65b5cf99f13bc0f752c14b84c",
+      "instructions_sha256": "2962719f0ca1c89f0d6da8973e27228131f443b01ce5c71861997a096a6fe403",
+      "actual_output": "{\n  \"kind\": \"answer\",\n  \"response_result\": \"not_met\",\n  \"feedback\": \"条件方向写对了：没有有效通行证，访客就不能进入恒温室。问题只在逗号后的 so：unless 已经引出了条件，后面直接接否定主句即可。\",\n  \"criteria\": {\n    \"condition\": {\n      \"status\": \"met\",\n      \"reason\": \"unless 从句说明条件是持有有效通行证，cannot enter 表明不满足这个条件时不能进入恒温室。\",\n      \"quote\": \"Unless the visitor holds a valid pass, so they cannot enter the climate-controlled room.\"\n    },\n    \"structure\": {\n      \"status\": \"not_met\",\n      \"reason\": \"条件从句和否定主句都有了，但逗号后的 so 多余，主句应直接接在 unless 从句后。\",\n      \"quote\": \"a valid pass, so they cannot enter\"\n    }\n  },\n  \"action\": \"repair\",\n  \"reason\": \"原意已经表达清楚，只需修正主从句的连接处。\",\n  \"strategy\": \"local_connector_repair\",\n  \"next\": {\n    \"criteria\": [\"structure\"],\n    \"question\": \"请只修改逗号后的连接处，其余内容不变，把完整的英文句子再写一遍。\",\n    \"expected\": \"学生保留原有的 unless 条件从句和 cannot enter 否定主句，去掉多余的 so，写出衔接正确的完整句子。\"\n  }\n}",
+      "output_sha256": "ab948aeb1c37ba13cb1f958adcaa05f057c26ceb7bed67d2efec3d7dbe423d86",
+      "actual_model": "gpt-6.2-astra",
+      "effort": "max",
+      "requested_service_tier": "ultrafast",
+      "returned_service_tier": "default",
+      "seconds": 9.33,
+      "first_text_seconds": 8.075,
+      "usage": {
+        "input_tokens": 1751,
+        "input_tokens_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": 0,
+          "cache_write_tokens_details": {
+            "ttl_30m_tokens": 0,
+            "ttl_12h_tokens": 0
+          }
+        },
+        "output_tokens": 1478,
+        "output_tokens_details": {
+          "reasoning_tokens": 1135
+        },
+        "total_tokens": 3229,
+        "attribution": {
+          "items": {
+            "msg_0031bd5ee8735d15016b0109fd1ff887d0827fc0aeb43be768": {
+              "input_tokens": 640,
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "output_tokens": 0,
+              "content": [
+                {
+                  "input_tokens": 640,
+                  "cached_tokens": 0,
+                  "cache_write_tokens": 0,
+                  "output_tokens": 0
+                }
+              ]
+            },
+            "msg_0031bd5ee8735d15016b010a03d6b087d0afd65f9831f6414f": {
+              "input_tokens": 0,
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "output_tokens": 343,
+              "content": [
+                {
+                  "input_tokens": 0,
+                  "cached_tokens": 0,
+                  "cache_write_tokens": 0,
+                  "output_tokens": 343
+                }
+              ]
+            },
+            "rs_0031bd5ee8735d15016b0109ffeab887d0837107a1fe94ec27": {
+              "input_tokens": 2,
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "output_tokens": 516
+            },
+            "rs_0031bd5ee8735d15016b010a03109487d09e68d827ceb82318": {
+              "input_tokens": 0,
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "output_tokens": 518
+            },
+            "rs_0031bd5ee8735d15016b010a03d6b887d0b0827ec7f5cdbfc3": {
+              "input_tokens": 0,
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "output_tokens": 101
+            }
+          },
+          "request_fields": {
+            "instructions": {
+              "input_tokens": 1109,
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "output_tokens": 0
+            }
+          }
+        }
+      },
+      "committed": true,
+      "classroom_status": "needs_practice",
+      "decision_kind": "answer",
+      "action": "repair",
+      "question_after": "请只修改逗号后的连接处，其余内容不变，把完整的英文句子再写一遍。"
+    },
+    {
+      "group": "acceptance",
+      "case": "r29",
+      "turn": 2,
+      "input_text": "{\"binding\": {\"lesson_id\": \"SYN-WORKSHOP\", \"lesson_point_id\": \"VP-LIMIT\", \"practice_id\": \"b315aa68-c20c-47c2-84d4-63e398a725ef\", \"task_sha256\": \"70c0fe0dbccfd7d89a1ee8904f89f94e6a24a15c4b69e0f347929958c8dce594\", \"rubric_version\": \"1\", \"attempt_id\": \"6a14cc1a13c94a42950cb37e1269274b\", \"question_id\": \"6994771f737a4736a5d622f153331d82\", \"response_id\": \"d48ae709-fb12-4313-9943-739902701f9f\", \"response_sha256\": \"32869f7e40fa06f47873cb38757abc5759dad09c57902045ed5f5d8555a24209\", \"revision\": 4}, \"goal\": \"用 unless 说明进入恒温室的必要条件，保留有通行证才可以进入的原意。\", \"target_kind\": \"specified_form\", \"criteria\": {\"condition\": {\"required\": true, \"description\": \"明确表达没有有效通行证就不能进入恒温室，条件方向正确。\", \"evidence\": \"meaning\"}, \"structure\": {\"required\": true, \"description\": \"使用 unless 引导条件从句，主从句连接与否定相配。\", \"evidence\": \"written_form\"}}, \"question\": \"请只修改逗号后的连接处，其余内容不变，把完整的英文句子再写一遍。\", \"question_purpose\": \"parent_output\", \"question_status\": \"sent\", \"classroom_status\": \"needs_practice\", \"answer\": \"Unless the visitor holds a valid pass, they cannot enter the climate-controlled room.\", \"medium\": \"submitted_text\", \"verification\": \"as_submitted\", \"production_origin\": \"human_revision\", \"prior\": [{\"id\": \"4b4e9d69-bb78-4faf-933b-bc2d7090053e\", \"at\": \"2026-11-21T03:03:33.364016+00:00\", \"binding\": {\"lesson_id\": \"SYN-WORKSHOP\", \"lesson_point_id\": \"VP-LIMIT\", \"practice_id\": \"b315aa68-c20c-47c2-84d4-63e398a725ef\", \"task_sha256\": \"70c0fe0dbccfd7d89a1ee8904f89f94e6a24a15c4b69e0f347929958c8dce594\", \"rubric_version\": \"1\", \"attempt_id\": \"6a14cc1a13c94a42950cb37e1269274b\", \"question_id\": \"98d35cec110f49c5bd6a8948b72103d3\", \"response_id\": \"ac6cfb18-ca07-41c6-a42e-8acba0a676a4\", \"response_sha256\": \"34506d79a383d2cb915b815b9d3213da1dc846cc29cf6857b8437030a58b3076\", \"revision\": 2}, \"criteria\": {\"condition\": {\"status\": \"met\", \"reason\": \"unless 从句说明条件是持有有效通行证，cannot enter 表明不满足这个条件时不能进入恒温室。\", \"anchor\": {\"draft_id\": \"ac6cfb18-ca07-41c6-a42e-8acba0a676a4\", \"draft_sha256\": \"34506d79a383d2cb915b815b9d3213da1dc846cc29cf6857b8437030a58b3076\", \"offset\": 0, \"length\": 88, \"quote\": \"Unless the visitor holds a valid pass, so they cannot enter the climate-controlled room.\", \"offset_unit\": \"unicode_codepoint\", \"paragraph\": 1, \"before\": \"\", \"after\": \"\"}, \"response_id\": \"ac6cfb18-ca07-41c6-a42e-8acba0a676a4\"}, \"structure\": {\"status\": \"not_met\", \"reason\": \"条件从句和否定主句都有了，但逗号后的 so 多余，主句应直接接在 unless 从句后。\", \"anchor\": {\"draft_id\": \"ac6cfb18-ca07-41c6-a42e-8acba0a676a4\", \"draft_sha256\": \"34506d79a383d2cb915b815b9d3213da1dc846cc29cf6857b8437030a58b3076\", \"offset\": 25, \"length\": 34, \"quote\": \"a valid pass, so they cannot enter\", \"offset_unit\": \"unicode_codepoint\", \"paragraph\": 1, \"before\": \"nless the visitor holds \", \"after\": \" the climate-controlled \"}, \"response_id\": \"ac6cfb18-ca07-41c6-a42e-8acba0a676a4\"}}, \"unresolved\": [\"structure\"], \"action\": \"repair\", \"response_result\": \"not_met\", \"production_evidence\": \"human_initial\", \"reason\": \"原意已经表达清楚，只需修正主从句的连接处。\", \"strategy\": \"local_connector_repair\", \"feedback\": \"条件方向写对了：没有有效通行证，访客就不能进入恒温室。问题只在逗号后的 so：unless 已经引出了条件，后面直接接否定主句即可。\", \"next\": {\"id\": \"6994771f737a4736a5d622f153331d82\", \"purpose\": \"parent_output\", \"created_at\": \"2026-11-21T03:03:33.364016+00:00\", \"text\": \"请只修改逗号后的连接处，其余内容不变，把完整的英文句子再写一遍。\", \"criteria\": [\"structure\"], \"reason\": \"原意已经表达清楚，只需修正主从句的连接处。\", \"expected\": \"学生保留原有的 unless 条件从句和 cannot enter 否定主句，去掉多余的 so，写出衔接正确的完整句子。\", \"source_response\": \"ac6cfb18-ca07-41c6-a42e-8acba0a676a4\", \"status\": \"planned\"}, \"status\": \"needs_practice\", \"support_blocked\": []}], \"previous_answers\": [{\"response_id\": \"ac6cfb18-ca07-41c6-a42e-8acba0a676a4\", \"text\": \"Unless the visitor holds a valid pass, so they cannot enter the climate-controlled room.\", \"production_origin\": \"human_initial\"}], \"help_exposure\": [{\"support\": \"hint\", \"text\": \"条件方向写对了：没有有效通行证，访客就不能进入恒温室。问题只在逗号后的 so：unless 已经引出了条件，后面直接接否定主句即可。\"}], \"next_point_known\": false, \"task_scope\": {\"qualified_variants\": [\"用符合本点条件的单句完成任务。\", \"调换信息顺序，同时保持原意并满足本点形式要求。\"], \"counterexamples\": [\"省略决定结论是否成立的限制，或颠倒关系。\"], \"genre_constraint\": \"原意、关系和读者理解优先，不按句长评分。\", \"hint_ladder\": [\"指出当前目标与位置\", \"提供局部方向\", \"按需给例子或建议\"], \"hint_policy\": {}, \"prerequisites\": []}, \"packet_sha256\": \"61edc861323185698ddd1d9b430443a65361eee68b166216bec896497cfd8629\"}",
+      "input_sha256": "6f9864fe94c1f058fdea073cd03914ac1705d4fa7a14da44fd6f639f930a50c8",
+      "instructions_sha256": "2962719f0ca1c89f0d6da8973e27228131f443b01ce5c71861997a096a6fe403",
+      "actual_output": "{\n  \"kind\": \"answer\",\n  \"response_result\": \"met\",\n  \"feedback\": \"你只删去了逗号后多余的 so，保留了其余内容。现在 unless 从句后直接接否定主句，准确表达了“没有有效通行证，访客就不能进入恒温室”。\",\n  \"criteria\": {\n    \"condition\": {\n      \"status\": \"met\",\n      \"reason\": \"句子把持有有效通行证作为进入恒温室的必要条件：没有有效通行证时，访客不能进入。\",\n      \"quote\": \"Unless the visitor holds a valid pass, they cannot enter the climate-controlled room.\"\n    },\n    \"structure\": {\n      \"status\": \"met\",\n      \"reason\": \"Unless 引导条件从句，逗号后直接接否定主句 they cannot enter，主从句衔接正确。\",\n      \"quote\": \"Unless the visitor holds a valid pass, they cannot enter\"\n    }\n  },\n  \"action\": \"advance\",\n  \"reason\": \"学生根据局部提示完成了原句修订，完整答句同时满足条件方向和指定句式两项要求。\",\n  \"strategy\": \"confirm_local_repair\",\n  \"next\": null\n}",
+      "output_sha256": "02c555cefbcc90a5fe52a7d6175d13e8607fc4a6b43f5f55f1cda35b36b4a491",
+      "actual_model": "gpt-6.2-astra",
+      "effort": "max",
+      "requested_service_tier": "ultrafast",
+      "returned_service_tier": "default",
+      "seconds": 7.761,
+      "first_text_seconds": 6.75,
+      "usage": {
+        "input_tokens": 2879,
+        "input_tokens_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": 0,
+          "cache_write_tokens_details": {
+            "ttl_30m_tokens": 0,
+            "ttl_12h_tokens": 0
+          }
+        },
+        "output_tokens": 1113,
+        "output_tokens_details": {
+          "reasoning_tokens": 836
+        },
+        "total_tokens": 3992,
+        "attribution": {
+          "items": {
+            "msg_036b376d32825375016b010a07018087d09030e1650f17db86": {
+              "input_tokens": 1768,
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "output_tokens": 0,
+              "content": [
+                {
+                  "input_tokens": 1768,
+                  "cached_tokens": 0,
+                  "cache_write_tokens": 0,
+                  "output_tokens": 0
+                }
+              ]
+            },
+            "msg_036b376d32825375016b010a0c475c87d0be76496cc0b8108d": {
+              "input_tokens": 0,
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "output_tokens": 277,
+              "content": [
+                {
+                  "input_tokens": 0,
+                  "cached_tokens": 0,
+                  "cache_write_tokens": 0,
+                  "output_tokens": 277
+                }
+              ]
+            },
+            "rs_036b376d32825375016b010a0a1ca887d08da5b135dcf7a922": {
+              "input_tokens": 2,
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "output_tokens": 516
+            },
+            "rs_036b376d32825375016b010a0c477487d08de2258d36fb0923": {
+              "input_tokens": 0,
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "output_tokens": 320
+            }
+          },
+          "request_fields": {
+            "instructions": {
+              "input_tokens": 1109,
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "output_tokens": 0
+            }
+          }
+        }
+      },
+      "committed": true,
+      "classroom_status": "ready_for_next",
+      "decision_kind": "answer",
+      "action": "advance",
+      "question_after": null
+    },
+    {
+      "group": "acceptance",
+      "case": "r31",
+      "turn": 1,
+      "input_text": "{\"binding\": {\"lesson_id\": \"SYN-WORKSHOP\", \"lesson_point_id\": \"VP-CONTRAST\", \"practice_id\": \"9177cfd3-3b5b-4c9a-a3db-44a008d9abbe\", \"task_sha256\": \"77609ecf016de10d7e23fa4422454e164f81b740fbe687c1e199caee6c9b7844\", \"rubric_version\": \"1\", \"attempt_id\": \"74cc36e047d04160973ddb260e3dee85\", \"question_id\": \"cfada343c4884a73bd099ec50d069d2b\", \"response_id\": \"e37a739e-0309-4f64-8be1-53e85fc82b96\", \"response_sha256\": \"fdaafa98c4df41f1a7183e773c165a2200f59733b92434bfb84c817a0827a163\", \"revision\": 2}, \"goal\": \"用自然英语保留两项事实，表达表面优势与实际限制的让步关系，不指定连接词。\", \"target_kind\": \"function\", \"criteria\": {\"meaning\": {\"required\": true, \"description\": \"保留远端讲座回放方便且缺少现场互动两项信息。\", \"evidence\": \"meaning\"}, \"link\": {\"required\": true, \"description\": \"清楚地表达预期落差或转折，不把一方写成另一方的原因。\", \"evidence\": \"meaning\"}}, \"question\": \"用英语给同学说明：远端讲座可以随时回看，不过缺少现场互动。请你自己组织表达。\", \"question_purpose\": \"parent_output\", \"question_status\": \"sent\", \"classroom_status\": \"needs_practice\", \"answer\": \"You can replay remote lectures whenever you like because they lack live interaction.\", \"medium\": \"submitted_text\", \"verification\": \"as_submitted\", \"production_origin\": \"human_initial\", \"prior\": [], \"previous_answers\": [], \"help_exposure\": [], \"next_point_known\": false, \"task_scope\": {\"qualified_variants\": [\"用符合本点条件的单句完成任务。\", \"调换信息顺序，同时保持原意并满足本点形式要求。\"], \"counterexamples\": [\"省略决定结论是否成立的限制，或颠倒关系。\"], \"genre_constraint\": \"原意、关系和读者理解优先，不按句长评分。\", \"hint_ladder\": [\"指出当前目标与位置\", \"提供局部方向\", \"按需给例子或建议\"], \"hint_policy\": {}, \"prerequisites\": []}, \"packet_sha256\": \"c41f89ea09348c8f8f15e9263f94e5938c26a884189248d8516786dd5d31b2a9\"}",
+      "input_sha256": "b604031b8688c5f849f51cca17d1fadabd51c7d47c4f6ee82bc1e6820bbfe8a9",
+      "instructions_sha256": "2962719f0ca1c89f0d6da8973e27228131f443b01ce5c71861997a096a6fe403",
+      "actual_output": "{\n  \"kind\": \"answer\",\n  \"response_result\": \"not_met\",\n  \"feedback\": \"“可以随时回看”和“缺少现场互动”这两项事实都写对了。问题在于 because：它把缺少互动说成了可以随时回看的原因，而题目要把缺少互动写成与回看便利相对的一项不足。\",\n  \"criteria\": {\n    \"meaning\": {\n      \"status\": \"met\",\n      \"reason\": \"前半句说明远端讲座可以随时回看，后半句说明它们缺少现场互动。\",\n      \"quote\": \"You can replay remote lectures whenever you like because they lack live interaction.\"\n    },\n    \"link\": {\n      \"status\": \"not_met\",\n      \"reason\": \"because 引出的是回看讲座的原因，没有表达便利与不足之间的转折。\",\n      \"quote\": \"because they lack live interaction.\"\n    }\n  },\n  \"action\": \"repair\",\n  \"reason\": \"两项事实都已表达准确，只需修正它们之间的关系。\",\n  \"strategy\": \"clause_contrast\",\n  \"next\": {\n    \"criteria\": [\"link\"],\n    \"question\": \"请保留原句的两项信息，只调整连接方式，用一句英语向同学表达回看的便利与现场互动不足之间的对比。\",\n    \"expected\": \"修改后的英文句子保留两项事实，并清楚表达转折或让步，而非因果。\"\n  }\n}",
+      "output_sha256": "b943909ad216bb1eb4da5040b4c67a4d0316b55f3b45f8e075e63e3cc3042ac5",
+      "actual_model": "gpt-6.2-astra",
+      "effort": "max",
+      "requested_service_tier": "ultrafast",
+      "returned_service_tier": "default",
+      "seconds": 9.962,
+      "first_text_seconds": 8.971,
+      "usage": {
+        "input_tokens": 1758,
+        "input_tokens_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": 0,
+          "cache_write_tokens_details": {
+            "ttl_30m_tokens": 0,
+            "ttl_12h_tokens": 0
+          }
+        },
+        "output_tokens": 1633,
+        "output_tokens_details": {
+          "reasoning_tokens": 1302
+        },
+        "total_tokens": 3391,
+        "attribution": {
+          "items": {
+            "msg_04189b34ea2eb062016b010a0f3d0087d09fa738398be315a3": {
+              "input_tokens": 647,
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "output_tokens": 0,
+              "content": [
+                {
+                  "input_tokens": 647,
+                  "cached_tokens": 0,
+                  "cache_write_tokens": 0,
+                  "output_tokens": 0
+                }
+              ]
+            },
+            "msg_04189b34ea2eb062016b010a164d4087d096de89445584627a": {
+              "input_tokens": 0,
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "output_tokens": 331,
+              "content": [
+                {
+                  "input_tokens": 0,
+                  "cached_tokens": 0,
+                  "cache_write_tokens": 0,
+                  "output_tokens": 331
+                }
+              ]
+            },
+            "rs_04189b34ea2eb062016b010a1259e887d0b27fc9324c4fae5a": {
+              "input_tokens": 2,
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "output_tokens": 516
+            },
+            "rs_04189b34ea2eb062016b010a14ef9887d0ba789a54f88f2d05": {
+              "input_tokens": 0,
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "output_tokens": 518
+            },
+            "rs_04189b34ea2eb062016b010a1644c887d08a445366fab764b5": {
+              "input_tokens": 0,
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "output_tokens": 268
+            }
+          },
+          "request_fields": {
+            "instructions": {
+              "input_tokens": 1109,
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "output_tokens": 0
+            }
+          }
+        }
+      },
+      "committed": true,
+      "classroom_status": "needs_practice",
+      "decision_kind": "answer",
+      "action": "repair",
+      "question_after": "请保留原句的两项信息，只调整连接方式，用一句英语向同学表达回看的便利与现场互动不足之间的对比。"
+    },
+    {
+      "group": "acceptance",
+      "case": "r31",
+      "turn": 2,
+      "input_text": "{\"binding\": {\"lesson_id\": \"SYN-WORKSHOP\", \"lesson_point_id\": \"VP-CONTRAST\", \"practice_id\": \"9177cfd3-3b5b-4c9a-a3db-44a008d9abbe\", \"task_sha256\": \"77609ecf016de10d7e23fa4422454e164f81b740fbe687c1e199caee6c9b7844\", \"rubric_version\": \"1\", \"attempt_id\": \"74cc36e047d04160973ddb260e3dee85\", \"question_id\": \"064340b9b845485888e430b16604b713\", \"response_id\": \"b8fd97b5-90c2-4d16-bb85-21f31661bd2f\", \"response_sha256\": \"3fad60210f3450338a8fdeb73d3137002656f4a6fa3f0a9b982d37abf3518d98\", \"revision\": 4}, \"goal\": \"用自然英语保留两项事实，表达表面优势与实际限制的让步关系，不指定连接词。\", \"target_kind\": \"function\", \"criteria\": {\"meaning\": {\"required\": true, \"description\": \"保留远端讲座回放方便且缺少现场互动两项信息。\", \"evidence\": \"meaning\"}, \"link\": {\"required\": true, \"description\": \"清楚地表达预期落差或转折，不把一方写成另一方的原因。\", \"evidence\": \"meaning\"}}, \"question\": \"请保留原句的两项信息，只调整连接方式，用一句英语向同学表达回看的便利与现场互动不足之间的对比。\", \"question_purpose\": \"parent_output\", \"question_status\": \"sent\", \"classroom_status\": \"needs_practice\", \"answer\": \"Remote lectures lack live interaction. That is why you can play the recording back at any time.\", \"medium\": \"submitted_text\", \"verification\": \"as_submitted\", \"production_origin\": \"human_revision\", \"prior\": [{\"id\": \"eb8d7dd5-bb4c-4b6a-b522-be9f9da4985d\", \"at\": \"2026-11-21T03:03:52.319352+00:00\", \"binding\": {\"lesson_id\": \"SYN-WORKSHOP\", \"lesson_point_id\": \"VP-CONTRAST\", \"practice_id\": \"9177cfd3-3b5b-4c9a-a3db-44a008d9abbe\", \"task_sha256\": \"77609ecf016de10d7e23fa4422454e164f81b740fbe687c1e199caee6c9b7844\", \"rubric_version\": \"1\", \"attempt_id\": \"74cc36e047d04160973ddb260e3dee85\", \"question_id\": \"cfada343c4884a73bd099ec50d069d2b\", \"response_id\": \"e37a739e-0309-4f64-8be1-53e85fc82b96\", \"response_sha256\": \"fdaafa98c4df41f1a7183e773c165a2200f59733b92434bfb84c817a0827a163\", \"revision\": 2}, \"criteria\": {\"meaning\": {\"status\": \"met\", \"reason\": \"前半句说明远端讲座可以随时回看，后半句说明它们缺少现场互动。\", \"anchor\": {\"draft_id\": \"e37a739e-0309-4f64-8be1-53e85fc82b96\", \"draft_sha256\": \"fdaafa98c4df41f1a7183e773c165a2200f59733b92434bfb84c817a0827a163\", \"offset\": 0, \"length\": 84, \"quote\": \"You can replay remote lectures whenever you like because they lack live interaction.\", \"offset_unit\": \"unicode_codepoint\", \"paragraph\": 1, \"before\": \"\", \"after\": \"\"}, \"response_id\": \"e37a739e-0309-4f64-8be1-53e85fc82b96\"}, \"link\": {\"status\": \"not_met\", \"reason\": \"because 引出的是回看讲座的原因，没有表达便利与不足之间的转折。\", \"anchor\": {\"draft_id\": \"e37a739e-0309-4f64-8be1-53e85fc82b96\", \"draft_sha256\": \"fdaafa98c4df41f1a7183e773c165a2200f59733b92434bfb84c817a0827a163\", \"offset\": 49, \"length\": 35, \"quote\": \"because they lack live interaction.\", \"offset_unit\": \"unicode_codepoint\", \"paragraph\": 1, \"before\": \"tures whenever you like \", \"after\": \"\"}, \"response_id\": \"e37a739e-0309-4f64-8be1-53e85fc82b96\"}}, \"unresolved\": [\"link\"], \"action\": \"repair\", \"response_result\": \"not_met\", \"production_evidence\": \"human_initial\", \"reason\": \"两项事实都已表达准确，只需修正它们之间的关系。\", \"strategy\": \"clause_contrast\", \"feedback\": \"“可以随时回看”和“缺少现场互动”这两项事实都写对了。问题在于 because：它把缺少互动说成了可以随时回看的原因，而题目要把缺少互动写成与回看便利相对的一项不足。\", \"next\": {\"id\": \"064340b9b845485888e430b16604b713\", \"purpose\": \"parent_output\", \"created_at\": \"2026-11-21T03:03:52.319352+00:00\", \"text\": \"请保留原句的两项信息，只调整连接方式，用一句英语向同学表达回看的便利与现场互动不足之间的对比。\", \"criteria\": [\"link\"], \"reason\": \"两项事实都已表达准确，只需修正它们之间的关系。\", \"expected\": \"修改后的英文句子保留两项事实，并清楚表达转折或让步，而非因果。\", \"source_response\": \"e37a739e-0309-4f64-8be1-53e85fc82b96\", \"status\": \"planned\"}, \"status\": \"needs_practice\", \"support_blocked\": []}], \"previous_answers\": [{\"response_id\": \"e37a739e-0309-4f64-8be1-53e85fc82b96\", \"text\": \"You can replay remote lectures whenever you like because they lack live interaction.\", \"production_origin\": \"human_initial\"}], \"help_exposure\": [{\"support\": \"hint\", \"text\": \"“可以随时回看”和“缺少现场互动”这两项事实都写对了。问题在于 because：它把缺少互动说成了可以随时回看的原因，而题目要把缺少互动写成与回看便利相对的一项不足。\"}], \"next_point_known\": false, \"task_scope\": {\"qualified_variants\": [\"用符合本点条件的单句完成任务。\", \"调换信息顺序，同时保持原意并满足本点形式要求。\"], \"counterexamples\": [\"省略决定结论是否成立的限制，或颠倒关系。\"], \"genre_constraint\": \"原意、关系和读者理解优先，不按句长评分。\", \"hint_ladder\": [\"指出当前目标与位置\", \"提供局部方向\", \"按需给例子或建议\"], \"hint_policy\": {}, \"prerequisites\": []}, \"packet_sha256\": \"bf9a43e033cf9d76b3f486482777ea1fcabe9398def2b81c0c1bee4b2b519ab5\"}",
+      "input_sha256": "a426bbf3ff1c0ef1692d06c952a1c5085a7f25e08f19719c6ebd52e59cb40d04",
+      "instructions_sha256": "2962719f0ca1c89f0d6da8973e27228131f443b01ce5c71861997a096a6fe403",
+      "actual_output": "{\n  \"kind\": \"answer\",\n  \"response_result\": \"not_met\",\n  \"feedback\": \"两项事实都写清楚了：远端讲座可以随时回看，也缺少现场互动。不过，分成两句后，That is why 仍然表示“所以”。读者会理解成“因为缺少现场互动，所以能随时回看”。题目要你把缺少互动写成这种听课方式的不足，而不是回看便利的原因。\",\n  \"criteria\": {\n    \"meaning\": {\n      \"status\": \"met\",\n      \"reason\": \"第一句指出远端讲座缺少现场互动，第二句说明录制内容可以随时回放。\",\n      \"quote\": \"Remote lectures lack live interaction. That is why you can play the recording back at any time.\"\n    },\n    \"link\": {\n      \"status\": \"not_met\",\n      \"reason\": \"That 指向前一句的“缺少现场互动”，而 That is why 把它说成了可以随时回看的原因，没有形成便利与不足之间的转折。\",\n      \"quote\": \"That is why you can play the recording back at any time.\"\n    }\n  },\n  \"action\": \"scaffold\",\n  \"reason\": \"上一稿用 because，这一稿换成 That is why，表达的仍是同一个因果关系。先用读者可能问的问题区分“解释原因”和“指出不足”，再回到英文单句表达。\",\n  \"strategy\": \"reader_question_match\",\n  \"next\": {\n    \"criteria\": [\"link\"],\n    \"question\": \"先不改英文，做一个配对。看看同学可能问的两个问题：\\nA. 为什么能随时回看？\\nB. 随时回看很方便，但这种听课方式有什么不足？\\n请用 A、B 填空：“缺少现场互动”在你这次的英文里回答了___；按题意，它应该回答___。\",\n    \"expected\": \"能区分当前措辞表达的因果关系与题目要求的便利和不足之间的对比。配对只核对关系判断，之后仍需本人用一句英语表达这一对比。\"\n  }\n}",
+      "output_sha256": "3d72258baf3a61b229843e15719b4cee2d517ed6866a6ee31c54e627929e9f23",
+      "actual_model": "gpt-6.2-astra",
+      "effort": "max",
+      "requested_service_tier": "ultrafast",
+      "returned_service_tier": "default",
+      "seconds": 24.573,
+      "first_text_seconds": 22.266,
+      "usage": {
+        "input_tokens": 2902,
+        "input_tokens_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": 0,
+          "cache_write_tokens_details": {
+            "ttl_30m_tokens": 0,
+            "ttl_12h_tokens": 0
+          }
+        },
+        "output_tokens": 3704,
+        "output_tokens_details": {
+          "reasoning_tokens": 3219
+        },
+        "total_tokens": 6606,
+        "attribution": {
+          "items": {
+            "msg_04e992a2bf7a0dc7016b010a19e86487d0990a16245091a61a": {
+              "input_tokens": 1791,
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "output_tokens": 0,
+              "content": [
+                {
+                  "input_tokens": 1791,
+                  "cached_tokens": 0,
+                  "cache_write_tokens": 0,
+                  "output_tokens": 0
+                }
+              ]
+            },
+            "msg_04e992a2bf7a0dc7016b010a2ec19c87d0b530f77bfd3b25ba": {
+              "input_tokens": 0,
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "output_tokens": 485,
+              "content": [
+                {
+                  "input_tokens": 0,
+                  "cached_tokens": 0,
+                  "cache_write_tokens": 0,
+                  "output_tokens": 485
+                }
+              ]
+            },
+            "rs_04e992a2bf7a0dc7016b010a1d0db487d0be9eef637d237ae3": {
+              "input_tokens": 2,
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "output_tokens": 516
+            },
+            "rs_04e992a2bf7a0dc7016b010a20305487d09fdec0cbd56f516e": {
+              "input_tokens": 0,
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "output_tokens": 518
+            },
+            "rs_04e992a2bf7a0dc7016b010a23746887d0ac69bb0773ed5f5f": {
+              "input_tokens": 0,
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "output_tokens": 518
+            },
+            "rs_04e992a2bf7a0dc7016b010a26935087d0822e997d456c564f": {
+              "input_tokens": 0,
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "output_tokens": 518
+            },
+            "rs_04e992a2bf7a0dc7016b010a2a2db887d0901336d4dc45b92d": {
+              "input_tokens": 0,
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "output_tokens": 518
+            },
+            "rs_04e992a2bf7a0dc7016b010a2dff0487d08b107c515ad58aa2": {
+              "input_tokens": 0,
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "output_tokens": 518
+            },
+            "rs_04e992a2bf7a0dc7016b010a2eba9487d0ad6ec281cd5becfa": {
+              "input_tokens": 0,
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "output_tokens": 113
+            }
+          },
+          "request_fields": {
+            "instructions": {
+              "input_tokens": 1109,
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "output_tokens": 0
+            }
+          }
+        }
+      },
+      "committed": true,
+      "classroom_status": "needs_practice",
+      "decision_kind": "answer",
+      "action": "scaffold",
+      "question_after": "先不改英文，做一个配对。看看同学可能问的两个问题：\nA. 为什么能随时回看？\nB. 随时回看很方便，但这种听课方式有什么不足？\n请用 A、B 填空：“缺少现场互动”在你这次的英文里回答了___；按题意，它应该回答___。"
+    },
+    {
+      "group": "acceptance",
+      "case": "r31",
+      "turn": 3,
+      "input_text": "{\"binding\": {\"lesson_id\": \"SYN-WORKSHOP\", \"lesson_point_id\": \"VP-CONTRAST\", \"practice_id\": \"9177cfd3-3b5b-4c9a-a3db-44a008d9abbe\", \"task_sha256\": \"77609ecf016de10d7e23fa4422454e164f81b740fbe687c1e199caee6c9b7844\", \"rubric_version\": \"1\", \"attempt_id\": \"74cc36e047d04160973ddb260e3dee85\", \"question_id\": \"92c978f856c04c6ba39e770b93774baa\", \"response_id\": \"8852137f-5264-4116-aead-21f4f4e8b73f\", \"response_sha256\": \"c9370b21b07740a420e83e948335f1f5ed4126aa4a5dc69fc8388e45224a15a0\", \"revision\": 6}, \"goal\": \"用自然英语保留两项事实，表达表面优势与实际限制的让步关系，不指定连接词。\", \"target_kind\": \"function\", \"criteria\": {\"meaning\": {\"required\": true, \"description\": \"保留远端讲座回放方便且缺少现场互动两项信息。\", \"evidence\": \"meaning\"}, \"link\": {\"required\": true, \"description\": \"清楚地表达预期落差或转折，不把一方写成另一方的原因。\", \"evidence\": \"meaning\"}}, \"question\": \"先不改英文，做一个配对。看看同学可能问的两个问题：\\nA. 为什么能随时回看？\\nB. 随时回看很方便，但这种听课方式有什么不足？\\n请用 A、B 填空：“缺少现场互动”在你这次的英文里回答了___；按题意，它应该回答___。\", \"question_purpose\": \"prerequisite\", \"question_status\": \"sent\", \"classroom_status\": \"needs_practice\", \"answer\": \"A，B。原来的英文拿互动不足解释了为什么能回看；题意是说回看虽然方便，却有互动不足这个局限。\", \"medium\": \"submitted_text\", \"verification\": \"as_submitted\", \"production_origin\": \"human_revision\", \"prior\": [{\"id\": \"eb8d7dd5-bb4c-4b6a-b522-be9f9da4985d\", \"at\": \"2026-11-21T03:03:52.319352+00:00\", \"binding\": {\"lesson_id\": \"SYN-WORKSHOP\", \"lesson_point_id\": \"VP-CONTRAST\", \"practice_id\": \"9177cfd3-3b5b-4c9a-a3db-44a008d9abbe\", \"task_sha256\": \"77609ecf016de10d7e23fa4422454e164f81b740fbe687c1e199caee6c9b7844\", \"rubric_version\": \"1\", \"attempt_id\": \"74cc36e047d04160973ddb260e3dee85\", \"question_id\": \"cfada343c4884a73bd099ec50d069d2b\", \"response_id\": \"e37a739e-0309-4f64-8be1-53e85fc82b96\", \"response_sha256\": \"fdaafa98c4df41f1a7183e773c165a2200f59733b92434bfb84c817a0827a163\", \"revision\": 2}, \"criteria\": {\"meaning\": {\"status\": \"met\", \"reason\": \"前半句说明远端讲座可以随时回看，后半句说明它们缺少现场互动。\", \"anchor\": {\"draft_id\": \"e37a739e-0309-4f64-8be1-53e85fc82b96\", \"draft_sha256\": \"fdaafa98c4df41f1a7183e773c165a2200f59733b92434bfb84c817a0827a163\", \"offset\": 0, \"length\": 84, \"quote\": \"You can replay remote lectures whenever you like because they lack live interaction.\", \"offset_unit\": \"unicode_codepoint\", \"paragraph\": 1, \"before\": \"\", \"after\": \"\"}, \"response_id\": \"e37a739e-0309-4f64-8be1-53e85fc82b96\"}, \"link\": {\"status\": \"not_met\", \"reason\": \"because 引出的是回看讲座的原因，没有表达便利与不足之间的转折。\", \"anchor\": {\"draft_id\": \"e37a739e-0309-4f64-8be1-53e85fc82b96\", \"draft_sha256\": \"fdaafa98c4df41f1a7183e773c165a2200f59733b92434bfb84c817a0827a163\", \"offset\": 49, \"length\": 35, \"quote\": \"because they lack live interaction.\", \"offset_unit\": \"unicode_codepoint\", \"paragraph\": 1, \"before\": \"tures whenever you like \", \"after\": \"\"}, \"response_id\": \"e37a739e-0309-4f64-8be1-53e85fc82b96\"}}, \"unresolved\": [\"link\"], \"action\": \"repair\", \"response_result\": \"not_met\", \"production_evidence\": \"human_initial\", \"reason\": \"两项事实都已表达准确，只需修正它们之间的关系。\", \"strategy\": \"clause_contrast\", \"feedback\": \"“可以随时回看”和“缺少现场互动”这两项事实都写对了。问题在于 because：它把缺少互动说成了可以随时回看的原因，而题目要把缺少互动写成与回看便利相对的一项不足。\", \"next\": {\"id\": \"064340b9b845485888e430b16604b713\", \"purpose\": \"parent_output\", \"created_at\": \"2026-11-21T03:03:52.319352+00:00\", \"text\": \"请保留原句的两项信息，只调整连接方式，用一句英语向同学表达回看的便利与现场互动不足之间的对比。\", \"criteria\": [\"link\"], \"reason\": \"两项事实都已表达准确，只需修正它们之间的关系。\", \"expected\": \"修改后的英文句子保留两项事实，并清楚表达转折或让步，而非因果。\", \"source_response\": \"e37a739e-0309-4f64-8be1-53e85fc82b96\", \"status\": \"planned\"}, \"status\": \"needs_practice\", \"support_blocked\": []}, {\"id\": \"d6a39214-0351-4834-934d-ed5bc1fc0ebd\", \"at\": \"2026-11-21T03:04:17.354757+00:00\", \"binding\": {\"lesson_id\": \"SYN-WORKSHOP\", \"lesson_point_id\": \"VP-CONTRAST\", \"practice_id\": \"9177cfd3-3b5b-4c9a-a3db-44a008d9abbe\", \"task_sha256\": \"77609ecf016de10d7e23fa4422454e164f81b740fbe687c1e199caee6c9b7844\", \"rubric_version\": \"1\", \"attempt_id\": \"74cc36e047d04160973ddb260e3dee85\", \"question_id\": \"064340b9b845485888e430b16604b713\", \"response_id\": \"b8fd97b5-90c2-4d16-bb85-21f31661bd2f\", \"response_sha256\": \"3fad60210f3450338a8fdeb73d3137002656f4a6fa3f0a9b982d37abf3518d98\", \"revision\": 4}, \"criteria\": {\"meaning\": {\"status\": \"met\", \"reason\": \"第一句指出远端讲座缺少现场互动，第二句说明录制内容可以随时回放。\", \"anchor\": {\"draft_id\": \"b8fd97b5-90c2-4d16-bb85-21f31661bd2f\", \"draft_sha256\": \"3fad60210f3450338a8fdeb73d3137002656f4a6fa3f0a9b982d37abf3518d98\", \"offset\": 0, \"length\": 95, \"quote\": \"Remote lectures lack live interaction. That is why you can play the recording back at any time.\", \"offset_unit\": \"unicode_codepoint\", \"paragraph\": 1, \"before\": \"\", \"after\": \"\"}, \"response_id\": \"b8fd97b5-90c2-4d16-bb85-21f31661bd2f\"}, \"link\": {\"status\": \"not_met\", \"reason\": \"That 指向前一句的“缺少现场互动”，而 That is why 把它说成了可以随时回看的原因，没有形成便利与不足之间的转折。\", \"anchor\": {\"draft_id\": \"b8fd97b5-90c2-4d16-bb85-21f31661bd2f\", \"draft_sha256\": \"3fad60210f3450338a8fdeb73d3137002656f4a6fa3f0a9b982d37abf3518d98\", \"offset\": 39, \"length\": 56, \"quote\": \"That is why you can play the recording back at any time.\", \"offset_unit\": \"unicode_codepoint\", \"paragraph\": 1, \"before\": \" lack live interaction. \", \"after\": \"\"}, \"response_id\": \"b8fd97b5-90c2-4d16-bb85-21f31661bd2f\"}}, \"unresolved\": [\"link\"], \"action\": \"scaffold\", \"response_result\": \"not_met\", \"production_evidence\": \"human_revision\", \"reason\": \"上一稿用 because，这一稿换成 That is why，表达的仍是同一个因果关系。先用读者可能问的问题区分“解释原因”和“指出不足”，再回到英文单句表达。\", \"strategy\": \"reader_question_match\", \"feedback\": \"两项事实都写清楚了：远端讲座可以随时回看，也缺少现场互动。不过，分成两句后，That is why 仍然表示“所以”。读者会理解成“因为缺少现场互动，所以能随时回看”。题目要你把缺少互动写成这种听课方式的不足，而不是回看便利的原因。\", \"next\": {\"id\": \"92c978f856c04c6ba39e770b93774baa\", \"purpose\": \"prerequisite\", \"created_at\": \"2026-11-21T03:04:17.354757+00:00\", \"text\": \"先不改英文，做一个配对。看看同学可能问的两个问题：\\nA. 为什么能随时回看？\\nB. 随时回看很方便，但这种听课方式有什么不足？\\n请用 A、B 填空：“缺少现场互动”在你这次的英文里回答了___；按题意，它应该回答___。\", \"criteria\": [\"link\"], \"reason\": \"上一稿用 because，这一稿换成 That is why，表达的仍是同一个因果关系。先用读者可能问的问题区分“解释原因”和“指出不足”，再回到英文单句表达。\", \"expected\": \"能区分当前措辞表达的因果关系与题目要求的便利和不足之间的对比。配对只核对关系判断，之后仍需本人用一句英语表达这一对比。\", \"source_response\": \"b8fd97b5-90c2-4d16-bb85-21f31661bd2f\", \"status\": \"planned\"}, \"status\": \"needs_practice\", \"support_blocked\": []}], \"previous_answers\": [{\"response_id\": \"e37a739e-0309-4f64-8be1-53e85fc82b96\", \"text\": \"You can replay remote lectures whenever you like because they lack live interaction.\", \"production_origin\": \"human_initial\"}, {\"response_id\": \"b8fd97b5-90c2-4d16-bb85-21f31661bd2f\", \"text\": \"Remote lectures lack live interaction. That is why you can play the recording back at any time.\", \"production_origin\": \"human_revision\"}], \"help_exposure\": [{\"support\": \"hint\", \"text\": \"“可以随时回看”和“缺少现场互动”这两项事实都写对了。问题在于 because：它把缺少互动说成了可以随时回看的原因，而题目要把缺少互动写成与回看便利相对的一项不足。\"}, {\"support\": \"hint\", \"text\": \"两项事实都写清楚了：远端讲座可以随时回看，也缺少现场互动。不过，分成两句后，That is why 仍然表示“所以”。读者会理解成“因为缺少现场互动，所以能随时回看”。题目要你把缺少互动写成这种听课方式的不足，而不是回看便利的原因。\"}], \"next_point_known\": false, \"task_scope\": {\"qualified_variants\": [\"用符合本点条件的单句完成任务。\", \"调换信息顺序，同时保持原意并满足本点形式要求。\"], \"counterexamples\": [\"省略决定结论是否成立的限制，或颠倒关系。\"], \"genre_constraint\": \"原意、关系和读者理解优先，不按句长评分。\", \"hint_ladder\": [\"指出当前目标与位置\", \"提供局部方向\", \"按需给例子或建议\"], \"hint_policy\": {}, \"prerequisites\": []}, \"packet_sha256\": \"b2b37099a1f1f36a648010407f9ab4dba0ea5c5d15d88c04f44aa71099c990f9\"}",
+      "input_sha256": "b904a4e3981cd775db3e5ea29162cd047fe2702ce2f1935615120c0d8231571b",
+      "instructions_sha256": "2962719f0ca1c89f0d6da8973e27228131f443b01ce5c71861997a096a6fe403",
+      "actual_output": "{\n  \"kind\": \"answer\",\n  \"response_result\": \"met\",\n  \"feedback\": \"A、B 都填对了。你看出了关键区别：上一稿把“缺少现场互动”当成了能随时回看的原因；按题意，它是这种听课方式的不足。两项事实不用改，要改的是英文里两者的关系。\",\n  \"criteria\": {\n    \"meaning\": {\n      \"status\": \"met\",\n      \"reason\": \"上一稿既写明远端讲座缺少现场互动，也说明录制内容可以随时回放。\",\n      \"quote\": \"Remote lectures lack live interaction. That is why you can play the recording back at any time.\",\n      \"response_id\": \"b8fd97b5-90c2-4d16-bb85-21f31661bd2f\"\n    },\n    \"link\": {\n      \"status\": \"unknown\",\n      \"reason\": \"这段中文说明正确区分了原因和局限，但还没有修改后的英文句子可用来核验是否表达出了转折。\",\n      \"quote\": \"原来的英文拿互动不足解释了为什么能回看；题意是说回看虽然方便，却有互动不足这个局限。\"\n    }\n  },\n  \"action\": \"repair\",\n  \"reason\": \"配对已经完成，前稿也保留了两项事实。现在回到原句，让学生把判断正确的关系写成英语。\",\n  \"strategy\": \"return_to_parent_output\",\n  \"next\": {\n    \"criteria\": [\"link\"],\n    \"question\": \"请把上一稿改成一句自然的英语，让同学读出远端讲座能随时回看这项便利与缺少现场互动这项不足之间的对比。\",\n    \"expected\": \"学生自己的英文单句保留两项事实，清楚表达便利与局限的对比，不把一项写成另一项的原因。不限连接词或信息顺序。\"\n  }\n}",
+      "output_sha256": "2304a391b2b7c9428fdac43b8fa881f375aab688990b8d30cc18fa5ffe527804",
+      "actual_model": "gpt-6.2-astra",
+      "effort": "max",
+      "requested_service_tier": "ultrafast",
+      "returned_service_tier": "default",
+      "seconds": 20.406,
+      "first_text_seconds": 18.095,
+      "usage": {
+        "input_tokens": 4331,
+        "input_tokens_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": 0,
+          "cache_write_tokens_details": {
+            "ttl_30m_tokens": 0,
+            "ttl_12h_tokens": 0
+          }
+        },
+        "output_tokens": 4218,
+        "output_tokens_details": {
+          "reasoning_tokens": 3781
+        },
+        "total_tokens": 8549,
+        "attribution": {
+          "items": {
+            "msg_0ff3fe21b26a4af4016b010ab82fa087d0881d5def586bc41f": {
+              "input_tokens": 3220,
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "output_tokens": 0,
+              "content": [
+                {
+                  "input_tokens": 3220,
+                  "cached_tokens": 0,
+                  "cache_write_tokens": 0,
+                  "output_tokens": 0
+                }
+              ]
+            },
+            "msg_0ff3fe21b26a4af4016b010ac90d6c87d0a387a455734dccb3": {
+              "input_tokens": 0,
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "output_tokens": 437,
+              "content": [
+                {
+                  "input_tokens": 0,
+                  "cached_tokens": 0,
+                  "cache_write_tokens": 0,
+                  "output_tokens": 437
+                }
+              ]
+            },
+            "rs_0ff3fe21b26a4af4016b010abac54487d085a39b68484894cb": {
+              "input_tokens": 2,
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "output_tokens": 516
+            },
+            "rs_0ff3fe21b26a4af4016b010abc0ab487d092c65c2b676bd88e": {
+              "input_tokens": 0,
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "output_tokens": 518
+            },
+            "rs_0ff3fe21b26a4af4016b010abe697887d09950e03b33cef694": {
+              "input_tokens": 0,
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "output_tokens": 518
+            },
+            "rs_0ff3fe21b26a4af4016b010ac10b1c87d08831283553bd28e5": {
+              "input_tokens": 0,
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "output_tokens": 518
+            },
+            "rs_0ff3fe21b26a4af4016b010ac2ee2487d08ae56c230584e055": {
+              "input_tokens": 0,
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "output_tokens": 518
+            },
+            "rs_0ff3fe21b26a4af4016b010ac5edb487d0b3e32cee60f1eef0": {
+              "input_tokens": 0,
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "output_tokens": 518
+            },
+            "rs_0ff3fe21b26a4af4016b010ac8188887d0a12aca75725a122f": {
+              "input_tokens": 0,
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "output_tokens": 518
+            },
+            "rs_0ff3fe21b26a4af4016b010ac90d8487d0bac08b640adbe8ff": {
+              "input_tokens": 0,
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "output_tokens": 157
+            }
+          },
+          "request_fields": {
+            "instructions": {
+              "input_tokens": 1109,
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "output_tokens": 0
+            }
+          }
+        }
+      },
+      "committed": true,
+      "classroom_status": "needs_practice",
+      "decision_kind": "answer",
+      "action": "repair",
+      "question_after": "请把上一稿改成一句自然的英语，让同学读出远端讲座能随时回看这项便利与缺少现场互动这项不足之间的对比。"
+    },
+    {
+      "group": "acceptance",
+      "case": "r31",
+      "turn": 4,
+      "input_text": "{\"binding\": {\"lesson_id\": \"SYN-WORKSHOP\", \"lesson_point_id\": \"VP-CONTRAST\", \"practice_id\": \"9177cfd3-3b5b-4c9a-a3db-44a008d9abbe\", \"task_sha256\": \"77609ecf016de10d7e23fa4422454e164f81b740fbe687c1e199caee6c9b7844\", \"rubric_version\": \"1\", \"attempt_id\": \"74cc36e047d04160973ddb260e3dee85\", \"question_id\": \"c63dfea417364906bdd46fa8ee242f17\", \"response_id\": \"b37fbdf2-83a6-44bf-b27e-2a60772b161a\", \"response_sha256\": \"bda2f6ca1734bd8bc1b64299a9a45fe80353e18d4659f9649cd5f2b6eba27f4d\", \"revision\": 8}, \"goal\": \"用自然英语保留两项事实，表达表面优势与实际限制的让步关系，不指定连接词。\", \"target_kind\": \"function\", \"criteria\": {\"meaning\": {\"required\": true, \"description\": \"保留远端讲座回放方便且缺少现场互动两项信息。\", \"evidence\": \"meaning\"}, \"link\": {\"required\": true, \"description\": \"清楚地表达预期落差或转折，不把一方写成另一方的原因。\", \"evidence\": \"meaning\"}}, \"question\": \"请把上一稿改成一句自然的英语，让同学读出远端讲座能随时回看这项便利与缺少现场互动这项不足之间的对比。\", \"question_purpose\": \"parent_output\", \"question_status\": \"sent\", \"classroom_status\": \"needs_practice\", \"answer\": \"Recorded lectures are convenient to replay, but they cannot give you the real-time exchange of a live class.\", \"medium\": \"submitted_text\", \"verification\": \"as_submitted\", \"production_origin\": \"human_revision\", \"prior\": [{\"id\": \"eb8d7dd5-bb4c-4b6a-b522-be9f9da4985d\", \"at\": \"2026-11-21T03:03:52.319352+00:00\", \"binding\": {\"lesson_id\": \"SYN-WORKSHOP\", \"lesson_point_id\": \"VP-CONTRAST\", \"practice_id\": \"9177cfd3-3b5b-4c9a-a3db-44a008d9abbe\", \"task_sha256\": \"77609ecf016de10d7e23fa4422454e164f81b740fbe687c1e199caee6c9b7844\", \"rubric_version\": \"1\", \"attempt_id\": \"74cc36e047d04160973ddb260e3dee85\", \"question_id\": \"cfada343c4884a73bd099ec50d069d2b\", \"response_id\": \"e37a739e-0309-4f64-8be1-53e85fc82b96\", \"response_sha256\": \"fdaafa98c4df41f1a7183e773c165a2200f59733b92434bfb84c817a0827a163\", \"revision\": 2}, \"criteria\": {\"meaning\": {\"status\": \"met\", \"reason\": \"前半句说明远端讲座可以随时回看，后半句说明它们缺少现场互动。\", \"anchor\": {\"draft_id\": \"e37a739e-0309-4f64-8be1-53e85fc82b96\", \"draft_sha256\": \"fdaafa98c4df41f1a7183e773c165a2200f59733b92434bfb84c817a0827a163\", \"offset\": 0, \"length\": 84, \"quote\": \"You can replay remote lectures whenever you like because they lack live interaction.\", \"offset_unit\": \"unicode_codepoint\", \"paragraph\": 1, \"before\": \"\", \"after\": \"\"}, \"response_id\": \"e37a739e-0309-4f64-8be1-53e85fc82b96\"}, \"link\": {\"status\": \"not_met\", \"reason\": \"because 引出的是回看讲座的原因，没有表达便利与不足之间的转折。\", \"anchor\": {\"draft_id\": \"e37a739e-0309-4f64-8be1-53e85fc82b96\", \"draft_sha256\": \"fdaafa98c4df41f1a7183e773c165a2200f59733b92434bfb84c817a0827a163\", \"offset\": 49, \"length\": 35, \"quote\": \"because they lack live interaction.\", \"offset_unit\": \"unicode_codepoint\", \"paragraph\": 1, \"before\": \"tures whenever you like \", \"after\": \"\"}, \"response_id\": \"e37a739e-0309-4f64-8be1-53e85fc82b96\"}}, \"unresolved\": [\"link\"], \"action\": \"repair\", \"response_result\": \"not_met\", \"production_evidence\": \"human_initial\", \"reason\": \"两项事实都已表达准确，只需修正它们之间的关系。\", \"strategy\": \"clause_contrast\", \"feedback\": \"“可以随时回看”和“缺少现场互动”这两项事实都写对了。问题在于 because：它把缺少互动说成了可以随时回看的原因，而题目要把缺少互动写成与回看便利相对的一项不足。\", \"next\": {\"id\": \"064340b9b845485888e430b16604b713\", \"purpose\": \"parent_output\", \"created_at\": \"2026-11-21T03:03:52.319352+00:00\", \"text\": \"请保留原句的两项信息，只调整连接方式，用一句英语向同学表达回看的便利与现场互动不足之间的对比。\", \"criteria\": [\"link\"], \"reason\": \"两项事实都已表达准确，只需修正它们之间的关系。\", \"expected\": \"修改后的英文句子保留两项事实，并清楚表达转折或让步，而非因果。\", \"source_response\": \"e37a739e-0309-4f64-8be1-53e85fc82b96\", \"status\": \"planned\"}, \"status\": \"needs_practice\", \"support_blocked\": []}, {\"id\": \"d6a39214-0351-4834-934d-ed5bc1fc0ebd\", \"at\": \"2026-11-21T03:04:17.354757+00:00\", \"binding\": {\"lesson_id\": \"SYN-WORKSHOP\", \"lesson_point_id\": \"VP-CONTRAST\", \"practice_id\": \"9177cfd3-3b5b-4c9a-a3db-44a008d9abbe\", \"task_sha256\": \"77609ecf016de10d7e23fa4422454e164f81b740fbe687c1e199caee6c9b7844\", \"rubric_version\": \"1\", \"attempt_id\": \"74cc36e047d04160973ddb260e3dee85\", \"question_id\": \"064340b9b845485888e430b16604b713\", \"response_id\": \"b8fd97b5-90c2-4d16-bb85-21f31661bd2f\", \"response_sha256\": \"3fad60210f3450338a8fdeb73d3137002656f4a6fa3f0a9b982d37abf3518d98\", \"revision\": 4}, \"criteria\": {\"meaning\": {\"status\": \"met\", \"reason\": \"第一句指出远端讲座缺少现场互动，第二句说明录制内容可以随时回放。\", \"anchor\": {\"draft_id\": \"b8fd97b5-90c2-4d16-bb85-21f31661bd2f\", \"draft_sha256\": \"3fad60210f3450338a8fdeb73d3137002656f4a6fa3f0a9b982d37abf3518d98\", \"offset\": 0, \"length\": 95, \"quote\": \"Remote lectures lack live interaction. That is why you can play the recording back at any time.\", \"offset_unit\": \"unicode_codepoint\", \"paragraph\": 1, \"before\": \"\", \"after\": \"\"}, \"response_id\": \"b8fd97b5-90c2-4d16-bb85-21f31661bd2f\"}, \"link\": {\"status\": \"not_met\", \"reason\": \"That 指向前一句的“缺少现场互动”，而 That is why 把它说成了可以随时回看的原因，没有形成便利与不足之间的转折。\", \"anchor\": {\"draft_id\": \"b8fd97b5-90c2-4d16-bb85-21f31661bd2f\", \"draft_sha256\": \"3fad60210f3450338a8fdeb73d3137002656f4a6fa3f0a9b982d37abf3518d98\", \"offset\": 39, \"length\": 56, \"quote\": \"That is why you can play the recording back at any time.\", \"offset_unit\": \"unicode_codepoint\", \"paragraph\": 1, \"before\": \" lack live interaction. \", \"after\": \"\"}, \"response_id\": \"b8fd97b5-90c2-4d16-bb85-21f31661bd2f\"}}, \"unresolved\": [\"link\"], \"action\": \"scaffold\", \"response_result\": \"not_met\", \"production_evidence\": \"human_revision\", \"reason\": \"上一稿用 because，这一稿换成 That is why，表达的仍是同一个因果关系。先用读者可能问的问题区分“解释原因”和“指出不足”，再回到英文单句表达。\", \"strategy\": \"reader_question_match\", \"feedback\": \"两项事实都写清楚了：远端讲座可以随时回看，也缺少现场互动。不过，分成两句后，That is why 仍然表示“所以”。读者会理解成“因为缺少现场互动，所以能随时回看”。题目要你把缺少互动写成这种听课方式的不足，而不是回看便利的原因。\", \"next\": {\"id\": \"92c978f856c04c6ba39e770b93774baa\", \"purpose\": \"prerequisite\", \"created_at\": \"2026-11-21T03:04:17.354757+00:00\", \"text\": \"先不改英文，做一个配对。看看同学可能问的两个问题：\\nA. 为什么能随时回看？\\nB. 随时回看很方便，但这种听课方式有什么不足？\\n请用 A、B 填空：“缺少现场互动”在你这次的英文里回答了___；按题意，它应该回答___。\", \"criteria\": [\"link\"], \"reason\": \"上一稿用 because，这一稿换成 That is why，表达的仍是同一个因果关系。先用读者可能问的问题区分“解释原因”和“指出不足”，再回到英文单句表达。\", \"expected\": \"能区分当前措辞表达的因果关系与题目要求的便利和不足之间的对比。配对只核对关系判断，之后仍需本人用一句英语表达这一对比。\", \"source_response\": \"b8fd97b5-90c2-4d16-bb85-21f31661bd2f\", \"status\": \"planned\"}, \"status\": \"needs_practice\", \"support_blocked\": []}, {\"id\": \"3770348a-0a11-47d5-b27a-7607e4536659\", \"at\": \"2026-11-21T03:06:51.671688+00:00\", \"binding\": {\"lesson_id\": \"SYN-WORKSHOP\", \"lesson_point_id\": \"VP-CONTRAST\", \"practice_id\": \"9177cfd3-3b5b-4c9a-a3db-44a008d9abbe\", \"task_sha256\": \"77609ecf016de10d7e23fa4422454e164f81b740fbe687c1e199caee6c9b7844\", \"rubric_version\": \"1\", \"attempt_id\": \"74cc36e047d04160973ddb260e3dee85\", \"question_id\": \"92c978f856c04c6ba39e770b93774baa\", \"response_id\": \"8852137f-5264-4116-aead-21f4f4e8b73f\", \"response_sha256\": \"c9370b21b07740a420e83e948335f1f5ed4126aa4a5dc69fc8388e45224a15a0\", \"revision\": 6}, \"criteria\": {\"meaning\": {\"status\": \"met\", \"reason\": \"上一稿既写明远端讲座缺少现场互动，也说明录制内容可以随时回放。\", \"anchor\": {\"draft_id\": \"b8fd97b5-90c2-4d16-bb85-21f31661bd2f\", \"draft_sha256\": \"3fad60210f3450338a8fdeb73d3137002656f4a6fa3f0a9b982d37abf3518d98\", \"offset\": 0, \"length\": 95, \"quote\": \"Remote lectures lack live interaction. That is why you can play the recording back at any time.\", \"offset_unit\": \"unicode_codepoint\", \"paragraph\": 1, \"before\": \"\", \"after\": \"\"}, \"response_id\": \"b8fd97b5-90c2-4d16-bb85-21f31661bd2f\"}, \"link\": {\"status\": \"unknown\", \"reason\": \"这段中文说明正确区分了原因和局限，但还没有修改后的英文句子可用来核验是否表达出了转折。\", \"anchor\": {\"draft_id\": \"8852137f-5264-4116-aead-21f4f4e8b73f\", \"draft_sha256\": \"c9370b21b07740a420e83e948335f1f5ed4126aa4a5dc69fc8388e45224a15a0\", \"offset\": 4, \"length\": 42, \"quote\": \"原来的英文拿互动不足解释了为什么能回看；题意是说回看虽然方便，却有互动不足这个局限。\", \"offset_unit\": \"unicode_codepoint\", \"paragraph\": 1, \"before\": \"A，B。\", \"after\": \"\"}, \"response_id\": \"8852137f-5264-4116-aead-21f4f4e8b73f\"}}, \"unresolved\": [\"link\"], \"action\": \"repair\", \"response_result\": \"met\", \"production_evidence\": \"human_revision\", \"reason\": \"配对已经完成，前稿也保留了两项事实。现在回到原句，让学生把判断正确的关系写成英语。\", \"strategy\": \"return_to_parent_output\", \"feedback\": \"A、B 都填对了。你看出了关键区别：上一稿把“缺少现场互动”当成了能随时回看的原因；按题意，它是这种听课方式的不足。两项事实不用改，要改的是英文里两者的关系。\", \"next\": {\"id\": \"c63dfea417364906bdd46fa8ee242f17\", \"purpose\": \"parent_output\", \"created_at\": \"2026-11-21T03:06:51.671688+00:00\", \"text\": \"请把上一稿改成一句自然的英语，让同学读出远端讲座能随时回看这项便利与缺少现场互动这项不足之间的对比。\", \"criteria\": [\"link\"], \"reason\": \"配对已经完成，前稿也保留了两项事实。现在回到原句，让学生把判断正确的关系写成英语。\", \"expected\": \"学生自己的英文单句保留两项事实，清楚表达便利与局限的对比，不把一项写成另一项的原因。不限连接词或信息顺序。\", \"source_response\": \"8852137f-5264-4116-aead-21f4f4e8b73f\", \"status\": \"planned\"}, \"status\": \"needs_practice\", \"support_blocked\": []}], \"previous_answers\": [{\"response_id\": \"e37a739e-0309-4f64-8be1-53e85fc82b96\", \"text\": \"You can replay remote lectures whenever you like because they lack live interaction.\", \"production_origin\": \"human_initial\"}, {\"response_id\": \"b8fd97b5-90c2-4d16-bb85-21f31661bd2f\", \"text\": \"Remote lectures lack live interaction. That is why you can play the recording back at any time.\", \"production_origin\": \"human_revision\"}, {\"response_id\": \"8852137f-5264-4116-aead-21f4f4e8b73f\", \"text\": \"A，B。原来的英文拿互动不足解释了为什么能回看；题意是说回看虽然方便，却有互动不足这个局限。\", \"production_origin\": \"human_revision\"}], \"help_exposure\": [{\"support\": \"hint\", \"text\": \"“可以随时回看”和“缺少现场互动”这两项事实都写对了。问题在于 because：它把缺少互动说成了可以随时回看的原因，而题目要把缺少互动写成与回看便利相对的一项不足。\"}, {\"support\": \"hint\", \"text\": \"两项事实都写清楚了：远端讲座可以随时回看，也缺少现场互动。不过，分成两句后，That is why 仍然表示“所以”。读者会理解成“因为缺少现场互动，所以能随时回看”。题目要你把缺少互动写成这种听课方式的不足，而不是回看便利的原因。\"}, {\"support\": \"hint\", \"text\": \"A、B 都填对了。你看出了关键区别：上一稿把“缺少现场互动”当成了能随时回看的原因；按题意，它是这种听课方式的不足。两项事实不用改，要改的是英文里两者的关系。\"}], \"next_point_known\": false, \"task_scope\": {\"qualified_variants\": [\"用符合本点条件的单句完成任务。\", \"调换信息顺序，同时保持原意并满足本点形式要求。\"], \"counterexamples\": [\"省略决定结论是否成立的限制，或颠倒关系。\"], \"genre_constraint\": \"原意、关系和读者理解优先，不按句长评分。\", \"hint_ladder\": [\"指出当前目标与位置\", \"提供局部方向\", \"按需给例子或建议\"], \"hint_policy\": {}, \"prerequisites\": []}, \"packet_sha256\": \"8a6a8f12ce0af6ba896786fa6f1988b6a1d09b3b3876ac11a443f5dcec452d68\"}",
+      "input_sha256": "9ecc0d738e177f60badc1c655ebf786a2578d03aad6f90bdb6b5d1b1c974cae6",
+      "instructions_sha256": "2962719f0ca1c89f0d6da8973e27228131f443b01ce5c71861997a096a6fe403",
+      "actual_output": "{\n  \"kind\": \"answer\",\n  \"response_result\": \"met\",\n  \"feedback\": \"你把两项事实之间的关系改对了：先说明回看讲座录像很方便，再用 but 指出录像不能提供现场课堂那样的实时交流。读者能看出，缺少互动是这种听课方式的不足，不是能回看的原因。\",\n  \"criteria\": {\n    \"meaning\": {\n      \"status\": \"met\",\n      \"reason\": \"前半句写明回看讲座录像很方便，后半句写明录像缺少现场课堂中的实时交流，两项信息都保留了。\",\n      \"quote\": \"Recorded lectures are convenient to replay, but they cannot give you the real-time exchange of a live class.\"\n    },\n    \"link\": {\n      \"status\": \"met\",\n      \"reason\": \"but 引出的不是对回看便利的原因解释，而是与这项便利形成对比的局限。\",\n      \"quote\": \"but they cannot give you the real-time exchange of a live class.\"\n    }\n  },\n  \"action\": \"advance\",\n  \"reason\": \"本轮亲自修改的英文单句保留了两项事实，并把前稿的因果关系改成了题目要求的转折。\",\n  \"strategy\": \"clause_contrast\",\n  \"next\": null\n}",
+      "output_sha256": "3fab676f31fd01b8bc9d94d7c09654ab0e3267d1c1f2f20db9f89cfcdc2d7449",
+      "actual_model": "gpt-6.2-astra",
+      "effort": "max",
+      "requested_service_tier": "ultrafast",
+      "returned_service_tier": "default",
+      "seconds": 7.15,
+      "first_text_seconds": 6.0,
+      "usage": {
+        "input_tokens": 5516,
+        "input_tokens_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": 0,
+          "cache_write_tokens_details": {
+            "ttl_30m_tokens": 0,
+            "ttl_12h_tokens": 0
+          }
+        },
+        "output_tokens": 1176,
+        "output_tokens_details": {
+          "reasoning_tokens": 879
+        },
+        "total_tokens": 6692,
+        "attribution": {
+          "items": {
+            "msg_0db7657b7057face016b010ae0c36487d0ac0909cb8a6f080d": {
+              "input_tokens": 4405,
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "output_tokens": 0,
+              "content": [
+                {
+                  "input_tokens": 4405,
+                  "cached_tokens": 0,
+                  "cache_write_tokens": 0,
+                  "output_tokens": 0
+                }
+              ]
+            },
+            "msg_0db7657b7057face016b010ae561f087d0b406a43b2b38604a": {
+              "input_tokens": 0,
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "output_tokens": 297,
+              "content": [
+                {
+                  "input_tokens": 0,
+                  "cached_tokens": 0,
+                  "cache_write_tokens": 0,
+                  "output_tokens": 297
+                }
+              ]
+            },
+            "rs_0db7657b7057face016b010ae3c99c87d0873d7c5b604191b8": {
+              "input_tokens": 2,
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "output_tokens": 516
+            },
+            "rs_0db7657b7057face016b010ae561fc87d09ed83f89b25dc9af": {
+              "input_tokens": 0,
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "output_tokens": 363
+            }
+          },
+          "request_fields": {
+            "instructions": {
+              "input_tokens": 1109,
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "output_tokens": 0
+            }
+          }
+        }
+      },
+      "committed": true,
+      "classroom_status": "ready_for_next",
+      "decision_kind": "answer",
+      "action": "advance",
+      "question_after": null
+    },
+    {
+      "group": "acceptance",
+      "case": "r43",
+      "turn": 1,
+      "input_text": "{\"binding\": {\"lesson_id\": \"SYN-WORKSHOP\", \"lesson_point_id\": \"VP-CONTRAST\", \"practice_id\": \"6b701d87-de07-472f-9bae-97dbe5099083\", \"task_sha256\": \"02096f2b97efa12e4988db3c074445d0230c1a8c13054e18a9a2fb852a4fb21b\", \"rubric_version\": \"1\", \"attempt_id\": \"7507f0727a5b4cc38cf181ab46129cb0\", \"question_id\": \"ba18a5256b084ce8b4199cdb55554d59\", \"response_id\": \"b37e30dd-4690-4d1e-a2f0-442215612187\", \"response_sha256\": \"384f3f0a0a3cae8eb825ff9c48c36ccd69729f5c953726a72a488ffe2d25b70a\", \"revision\": 2}, \"goal\": \"用自然英语保留两项事实，表达表面优势与实际限制的让步关系，不指定连接词。\", \"target_kind\": \"function\", \"criteria\": {\"meaning\": {\"required\": true, \"description\": \"保留远端讲座回放方便且缺少现场互动两项信息。\", \"evidence\": \"meaning\"}, \"link\": {\"required\": true, \"description\": \"清楚地表达预期落差或转折，不把一方写成另一方的原因。\", \"evidence\": \"meaning\"}}, \"question\": \"用英语给同学说明：远端讲座可以随时回看，不过缺少现场互动。请你自己组织表达。\", \"question_purpose\": \"parent_output\", \"question_status\": \"sent\", \"classroom_status\": \"needs_practice\", \"answer\": \"It does, but maybe that part is different.\", \"medium\": \"submitted_text\", \"verification\": \"as_submitted\", \"production_origin\": \"human_initial\", \"prior\": [], \"previous_answers\": [], \"help_exposure\": [], \"next_point_known\": false, \"task_scope\": {\"qualified_variants\": [\"用符合本点条件的单句完成任务。\", \"调换信息顺序，同时保持原意并满足本点形式要求。\"], \"counterexamples\": [\"省略决定结论是否成立的限制，或颠倒关系。\"], \"genre_constraint\": \"原意、关系和读者理解优先，不按句长评分。\", \"hint_ladder\": [\"指出当前目标与位置\", \"提供局部方向\", \"按需给例子或建议\"], \"hint_policy\": {}, \"prerequisites\": []}, \"packet_sha256\": \"15710bf91f0a794111ed50267e24956d32a20616b8f39443e4f44fec7b3bdaa5\"}",
+      "input_sha256": "0ffa4c7e279f7e3cfc48a1b53e6157093dd80b844341a389d91a988962de9034",
+      "instructions_sha256": "2962719f0ca1c89f0d6da8973e27228131f443b01ce5c71861997a096a6fe403",
+      "actual_output": "{\n  \"kind\": \"answer\",\n  \"response_result\": \"unknown\",\n  \"feedback\": \"你用 but 提示了转折。不过，“It does” 没说具体能做什么，“that part is different” 也没说哪一点不同。同学只看这句话，还不知道你在对比什么。\",\n  \"criteria\": {\n    \"meaning\": {\n      \"status\": \"unknown\",\n      \"reason\": \"does 代指的动作和 that part 所指的内容都不明确，无法确认你说的是远端讲座可以随时回看，以及它缺少现场互动。\",\n      \"quote\": \"It does, but maybe that part is different.\"\n    },\n    \"link\": {\n      \"status\": \"unknown\",\n      \"reason\": \"but 提示了转折，但后半句只说某一点可能不同，读者还看不出你是否在用互动上的限制对照回看的便利。\",\n      \"quote\": \"but maybe that part is different.\"\n    }\n  },\n  \"action\": \"clarify\",\n  \"reason\": \"这是一次作答尝试；需要先澄清两个分句各指什么，才能判断两项事实及其关系。\",\n  \"strategy\": \"clarify_referents\",\n  \"next\": {\n    \"criteria\": [\"meaning\", \"link\"],\n    \"question\": \"请把原句中两处含糊的表达写具体，用一句英语让同学看出：远端讲座在回看时间上有什么便利，却又少了哪种互动？\",\n    \"expected\": \"学生自己的英文句子明确写出可随时回看远端讲座和缺少现场互动，并把两者表达为便利与限制的对照，而非因果。\"\n  }\n}",
+      "output_sha256": "e2546f4c1642068d2afc72a756d4e03948f11525ab06030d47537da18dab0e89",
+      "actual_model": "gpt-6.2-astra",
+      "effort": "max",
+      "requested_service_tier": "ultrafast",
+      "returned_service_tier": "default",
+      "seconds": 23.3,
+      "first_text_seconds": 22.086,
+      "usage": {
+        "input_tokens": 1753,
+        "input_tokens_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": 0,
+          "cache_write_tokens_details": {
+            "ttl_30m_tokens": 0,
+            "ttl_12h_tokens": 0
+          }
+        },
+        "output_tokens": 4374,
+        "output_tokens_details": {
+          "reasoning_tokens": 3991
+        },
+        "total_tokens": 6127,
+        "attribution": {
+          "items": {
+            "msg_0cebda61c5c0cff3016b010a33d9e887d09e80b2abd4a8a6a6": {
+              "input_tokens": 642,
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "output_tokens": 0,
+              "content": [
+                {
+                  "input_tokens": 642,
+                  "cached_tokens": 0,
+                  "cache_write_tokens": 0,
+                  "output_tokens": 0
+                }
+              ]
+            },
+            "msg_0cebda61c5c0cff3016b010a47d16087d0b4e8506dfe83d6e1": {
+              "input_tokens": 0,
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "output_tokens": 383,
+              "content": [
+                {
+                  "input_tokens": 0,
+                  "cached_tokens": 0,
+                  "cache_write_tokens": 0,
+                  "output_tokens": 383
+                }
+              ]
+            },
+            "rs_0cebda61c5c0cff3016b010a37685487d086fb3885441d641a": {
+              "input_tokens": 2,
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "output_tokens": 516
+            },
+            "rs_0cebda61c5c0cff3016b010a3a921887d0b82c35b770b7d1a5": {
+              "input_tokens": 0,
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "output_tokens": 518
+            },
+            "rs_0cebda61c5c0cff3016b010a3cfefc87d0add7cbc262c2290d": {
+              "input_tokens": 0,
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "output_tokens": 518
+            },
+            "rs_0cebda61c5c0cff3016b010a3f890087d09b0b25ab71bdd620": {
+              "input_tokens": 0,
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "output_tokens": 518
+            },
+            "rs_0cebda61c5c0cff3016b010a42123887d090aeebdae1d75b84": {
+              "input_tokens": 0,
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "output_tokens": 518
+            },
+            "rs_0cebda61c5c0cff3016b010a43e5c887d09bec0c55bb1d06f7": {
+              "input_tokens": 0,
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "output_tokens": 518
+            },
+            "rs_0cebda61c5c0cff3016b010a4659c087d08dea647d8a662647": {
+              "input_tokens": 0,
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "output_tokens": 518
+            },
+            "rs_0cebda61c5c0cff3016b010a47d18487d0857ad06d36ad5a97": {
+              "input_tokens": 0,
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "output_tokens": 367
+            }
+          },
+          "request_fields": {
+            "instructions": {
+              "input_tokens": 1109,
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "output_tokens": 0
+            }
+          }
+        }
+      },
+      "committed": true,
+      "classroom_status": "needs_practice",
+      "decision_kind": "answer",
+      "action": "clarify",
+      "question_after": "请把原句中两处含糊的表达写具体，用一句英语让同学看出：远端讲座在回看时间上有什么便利，却又少了哪种互动？"
+    },
+    {
+      "group": "acceptance",
+      "case": "r47",
+      "turn": 1,
+      "input_text": "{\"binding\": {\"lesson_id\": \"SYN-WORKSHOP\", \"lesson_point_id\": \"VP-LIMIT\", \"practice_id\": \"a99fa488-8c25-420e-82e9-326bb23b493d\", \"task_sha256\": \"b453c973f6772f728cf7d33acba4fb2f5788e0c66aa92775c68662577ca6e6e5\", \"rubric_version\": \"1\", \"attempt_id\": \"2faa884b46134d33a7fa882180e3cd89\", \"question_id\": \"1b85a02a3276418984d186f420c13791\", \"response_id\": \"0dc8ae48-ba60-4ecc-8f3a-9c8f3e65e72c\", \"response_sha256\": \"eb68192a21a324693df8e24ba6eaa6f9cf9a24a4319bc1dc28d5ccea6ec38114\", \"revision\": 2}, \"goal\": \"用 unless 说明进入恒温室的必要条件，保留有通行证才可以进入的原意。\", \"target_kind\": \"specified_form\", \"criteria\": {\"condition\": {\"required\": true, \"description\": \"明确表达没有有效通行证就不能进入恒温室，条件方向正确。\", \"evidence\": \"meaning\"}, \"structure\": {\"required\": true, \"description\": \"使用 unless 引导条件从句，主从句连接与否定相配。\", \"evidence\": \"written_form\"}}, \"question\": \"请用 unless 写一句话，告诉访客没有有效通行证就不能进入恒温室。\", \"question_purpose\": \"parent_output\", \"question_status\": \"sent\", \"classroom_status\": \"needs_practice\", \"answer\": \"先不作答，可以解释一下 unless 在这个任务里的意思吗？\", \"medium\": \"submitted_text\", \"verification\": \"as_submitted\", \"production_origin\": \"human_initial\", \"prior\": [], \"previous_answers\": [], \"help_exposure\": [], \"next_point_known\": false, \"task_scope\": {\"qualified_variants\": [\"用符合本点条件的单句完成任务。\", \"调换信息顺序，同时保持原意并满足本点形式要求。\"], \"counterexamples\": [\"省略决定结论是否成立的限制，或颠倒关系。\"], \"genre_constraint\": \"原意、关系和读者理解优先，不按句长评分。\", \"hint_ladder\": [\"指出当前目标与位置\", \"提供局部方向\", \"按需给例子或建议\"], \"hint_policy\": {}, \"prerequisites\": []}, \"packet_sha256\": \"0b8c00f81a1f170346e7768608f6b536b25840d7c03e79a96e6cea906b27af6c\"}",
+      "input_sha256": "33b8425540e8a25f020fffe30750c8f423dc39602017ba3341831a3138141344",
+      "instructions_sha256": "2962719f0ca1c89f0d6da8973e27228131f443b01ce5c71861997a096a6fe403",
+      "actual_output": "{\n  \"kind\": \"control\",\n  \"control\": \"explain\",\n  \"feedback\": \"这里的 unless 意思是“除非”，也可以理解为“如果不……”。unless 后面说的是“持有有效通行证”，不用再加 not；主句说的是“不能进入恒温室”。重点是：没有有效通行证就不能进，而不是有证就一定能进。\"\n}",
+      "output_sha256": "fb3a47ff015e8427d99c0bc94f32d87c934d05a2fc67b1afd6ec9f29d12dae95",
+      "actual_model": "gpt-6.2-astra",
+      "effort": "max",
+      "requested_service_tier": "ultrafast",
+      "returned_service_tier": "default",
+      "seconds": 8.464,
+      "first_text_seconds": 8.21,
+      "usage": {
+        "input_tokens": 1756,
+        "input_tokens_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": 0,
+          "cache_write_tokens_details": {
+            "ttl_30m_tokens": 0,
+            "ttl_12h_tokens": 0
+          }
+        },
+        "output_tokens": 868,
+        "output_tokens_details": {
+          "reasoning_tokens": 771
+        },
+        "total_tokens": 2624,
+        "attribution": {
+          "items": {
+            "msg_0f7c8d7adafdad63016b010a4b2d5c87d0ad60e57b89ca29be": {
+              "input_tokens": 645,
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "output_tokens": 0,
+              "content": [
+                {
+                  "input_tokens": 645,
+                  "cached_tokens": 0,
+                  "cache_write_tokens": 0,
+                  "output_tokens": 0
+                }
+              ]
+            },
+            "msg_0f7c8d7adafdad63016b010a51d0ec87d0838ba90a37c8406a": {
+              "input_tokens": 0,
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "output_tokens": 97,
+              "content": [
+                {
+                  "input_tokens": 0,
+                  "cached_tokens": 0,
+                  "cache_write_tokens": 0,
+                  "output_tokens": 97
+                }
+              ]
+            },
+            "rs_0f7c8d7adafdad63016b010a504bb087d0a4bf443541337a88": {
+              "input_tokens": 2,
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "output_tokens": 516
+            },
+            "rs_0f7c8d7adafdad63016b010a51d0fc87d0a6d175dba8a3bba4": {
+              "input_tokens": 0,
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "output_tokens": 255
+            }
+          },
+          "request_fields": {
+            "instructions": {
+              "input_tokens": 1109,
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "output_tokens": 0
+            }
+          }
+        }
+      },
+      "committed": true,
+      "classroom_status": "needs_practice",
+      "decision_kind": "control",
+      "action": "explain",
+      "question_after": null
+    },
+    {
+      "group": "acceptance",
+      "case": "r53",
+      "turn": 1,
+      "input_text": "{\"binding\": {\"lesson_id\": \"SYN-WORKSHOP\", \"lesson_point_id\": \"VP-LIMIT\", \"practice_id\": \"1b20ee90-fe13-4eab-a7c3-720cc5860bc1\", \"task_sha256\": \"2bc6ff0f3aa7be5a73bb48167eb43b4962883d7337b744856f5de4e15ad476b3\", \"rubric_version\": \"1\", \"attempt_id\": \"1c4539c0dac54fb28e0d4b95ec2fd154\", \"question_id\": \"8ea97f5dcb61433ebef76874bd31b7ef\", \"response_id\": \"283c930f-d907-4c84-b483-112d371e4f82\", \"response_sha256\": \"accc7dfa9b8cdd7b9f65ab74fc995dd6123e3b95047293b8b8066b728e4067e1\", \"revision\": 2}, \"goal\": \"用 unless 说明进入恒温室的必要条件，保留有通行证才可以进入的原意。\", \"target_kind\": \"specified_form\", \"criteria\": {\"condition\": {\"required\": true, \"description\": \"明确表达没有有效通行证就不能进入恒温室，条件方向正确。\", \"evidence\": \"meaning\"}, \"structure\": {\"required\": true, \"description\": \"使用 unless 引导条件从句，主从句连接与否定相配。\", \"evidence\": \"written_form\"}}, \"question\": \"请用 unless 写一句话，告诉访客没有有效通行证就不能进入恒温室。\", \"question_purpose\": \"parent_output\", \"question_status\": \"sent\", \"classroom_status\": \"needs_practice\", \"answer\": \"我已看完视频，先暂停这个点。\", \"medium\": \"submitted_text\", \"verification\": \"as_submitted\", \"production_origin\": \"human_initial\", \"prior\": [], \"previous_answers\": [], \"help_exposure\": [], \"next_point_known\": false, \"task_scope\": {\"qualified_variants\": [\"用符合本点条件的单句完成任务。\", \"调换信息顺序，同时保持原意并满足本点形式要求。\"], \"counterexamples\": [\"省略决定结论是否成立的限制，或颠倒关系。\"], \"genre_constraint\": \"原意、关系和读者理解优先，不按句长评分。\", \"hint_ladder\": [\"指出当前目标与位置\", \"提供局部方向\", \"按需给例子或建议\"], \"hint_policy\": {}, \"prerequisites\": []}, \"packet_sha256\": \"cdccc7853ac5d5bf62dc6bc06f1b357b0d2dffb882d4fcbc8c458d0bef9be378\"}",
+      "input_sha256": "bca18ca2b08276ba5be7bd2c269a7bd5ba09d6c4340b161cfd92d4fc5a6ec25e",
+      "instructions_sha256": "2962719f0ca1c89f0d6da8973e27228131f443b01ce5c71861997a096a6fe403",
+      "actual_output": "{\"kind\":\"control\",\"control\":\"pause\",\"feedback\":\"好的，这个点先暂停。\"}",
+      "output_sha256": "622d69b0d730cbbaaadf14f083c759878e12aef7356a01658181e4f10eab5cd1",
+      "actual_model": "gpt-6.2-astra",
+      "effort": "max",
+      "requested_service_tier": "ultrafast",
+      "returned_service_tier": "default",
+      "seconds": 3.077,
+      "first_text_seconds": 2.991,
+      "usage": {
+        "input_tokens": 1750,
+        "input_tokens_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": 0,
+          "cache_write_tokens_details": {
+            "ttl_30m_tokens": 0,
+            "ttl_12h_tokens": 0
+          }
+        },
+        "output_tokens": 263,
+        "output_tokens_details": {
+          "reasoning_tokens": 238
+        },
+        "total_tokens": 2013,
+        "attribution": {
+          "items": {
+            "msg_07b9f9603611a088016b010a54371887d0aaebdd79875dec35": {
+              "input_tokens": 639,
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "output_tokens": 0,
+              "content": [
+                {
+                  "input_tokens": 639,
+                  "cached_tokens": 0,
+                  "cache_write_tokens": 0,
+                  "output_tokens": 0
+                }
+              ]
+            },
+            "msg_07b9f9603611a088016b010a56241887d0854805b00d21a90a": {
+              "input_tokens": 0,
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "output_tokens": 25,
+              "content": [
+                {
+                  "input_tokens": 0,
+                  "cached_tokens": 0,
+                  "cache_write_tokens": 0,
+                  "output_tokens": 25
+                }
+              ]
+            },
+            "rs_07b9f9603611a088016b010a56242487d0bd1d63d9982264df": {
+              "input_tokens": 2,
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "output_tokens": 238
+            }
+          },
+          "request_fields": {
+            "instructions": {
+              "input_tokens": 1109,
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "output_tokens": 0
+            }
+          }
+        }
+      },
+      "committed": true,
+      "classroom_status": "paused",
+      "decision_kind": "control",
+      "action": "pause",
+      "question_after": null
+    },
+    {
+      "group": "acceptance",
+      "case": "r61",
+      "turn": 1,
+      "input_text": "{\"binding\": {\"lesson_id\": \"SYN-WORKSHOP\", \"lesson_point_id\": \"VP-LIMIT\", \"practice_id\": \"51737a72-a511-4125-b706-0be9cf6095b6\", \"task_sha256\": \"2928bbe6668a846014da382024f29f22c3fe2d78e0420915011347908d2a6396\", \"rubric_version\": \"1\", \"attempt_id\": \"5186284ef9e340b59006adaa1fe46fa6\", \"question_id\": \"20272d54a8ed4c15b5ecb887b0718d3a\", \"response_id\": \"1b077d59-ceba-4ae2-8b97-2512159ddba3\", \"response_sha256\": \"1897cac0245861b0043442294174ff1bda462fed12b405cd6cce6dccb77424ac\", \"revision\": 2}, \"goal\": \"用 unless 说明进入恒温室的必要条件，保留有通行证才可以进入的原意。\", \"target_kind\": \"specified_form\", \"criteria\": {\"condition\": {\"required\": true, \"description\": \"明确表达没有有效通行证就不能进入恒温室，条件方向正确。\", \"evidence\": \"meaning\"}, \"structure\": {\"required\": true, \"description\": \"使用 unless 引导条件从句，主从句连接与否定相配。\", \"evidence\": \"written_form\"}}, \"question\": \"请用 unless 写一句话，告诉访客没有有效通行证就不能进入恒温室。\", \"question_purpose\": \"parent_output\", \"question_status\": \"sent\", \"classroom_status\": \"needs_practice\", \"answer\": \"Unless a visitor has a valid pass, that visitor cannot enter the climate-controlled room.\", \"medium\": \"speech_to_text\", \"verification\": \"as_submitted\", \"production_origin\": \"human_initial\", \"prior\": [], \"previous_answers\": [], \"help_exposure\": [], \"next_point_known\": false, \"task_scope\": {\"qualified_variants\": [\"用符合本点条件的单句完成任务。\", \"调换信息顺序，同时保持原意并满足本点形式要求。\"], \"counterexamples\": [\"省略决定结论是否成立的限制，或颠倒关系。\"], \"genre_constraint\": \"原意、关系和读者理解优先，不按句长评分。\", \"hint_ladder\": [\"指出当前目标与位置\", \"提供局部方向\", \"按需给例子或建议\"], \"hint_policy\": {}, \"prerequisites\": []}, \"packet_sha256\": \"623c0b0d7ae786dcdb41c41351185ea6613b4bcc8fa3544c1c38bc46af4b9f1f\"}",
+      "input_sha256": "965a44ee4652937ec9b95af9469b2a1d7529518dec8bff12a117739a55c49254",
+      "instructions_sha256": "2962719f0ca1c89f0d6da8973e27228131f443b01ce5c71861997a096a6fe403",
+      "actual_output": "{\n  \"kind\": \"answer\",\n  \"response_result\": \"unknown\",\n  \"feedback\": \"你把条件方向说对了：没有有效通行证，访客就不能进入恒温室。转写中的 unless 和 cannot 搭配得当；要确认书面结构，还需要看你亲自写的句子。\",\n  \"criteria\": {\n    \"condition\": {\n      \"status\": \"met\",\n      \"reason\": \"句子明确表达了没有有效通行证时访客不能进入恒温室，因此持有有效通行证是进入的必要条件。\",\n      \"quote\": \"Unless a visitor has a valid pass, that visitor cannot enter the climate-controlled room.\"\n    },\n    \"structure\": {\n      \"status\": \"unknown\",\n      \"reason\": \"转写中，unless 引出肯定的条件从句，主句用 cannot 否定进入，搭配正确。但这是语音转写，不能据此确认本人写出了这一结构。\",\n      \"quote\": \"Unless a visitor has a valid pass, that visitor cannot enter\"\n    }\n  },\n  \"action\": \"check_variant\",\n  \"reason\": \"条件方向已经确认，只需用本人键入的同义句核验书面结构。\",\n  \"strategy\": \"typed_clause_reorder\",\n  \"next\": {\n    \"criteria\": [\"structure\"],\n    \"question\": \"请改用键盘，亲自写一句英文：先写访客不能进入恒温室，再用 unless 从句说明持有有效通行证这一条件。\",\n    \"expected\": \"本人键入一个完整英文句子，否定进入恒温室的主句在前，后接 unless 引导的持有有效通行证的条件从句，原意不变。\"\n  }\n}",
+      "output_sha256": "dd7bb997142b7cc3dc9842a62b68d149bac7c1629a5692cc30f3c885878579f6",
+      "actual_model": "gpt-6.2-astra",
+      "effort": "max",
+      "requested_service_tier": "ultrafast",
+      "returned_service_tier": "default",
+      "seconds": 44.18,
+      "first_text_seconds": 42.572,
+      "usage": {
+        "input_tokens": 1742,
+        "input_tokens_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": 0,
+          "cache_write_tokens_details": {
+            "ttl_30m_tokens": 0,
+            "ttl_12h_tokens": 0
+          }
+        },
+        "output_tokens": 8339,
+        "output_tokens_details": {
+          "reasoning_tokens": 7954
+        },
+        "total_tokens": 10081,
+        "attribution": {
+          "items": {
+            "msg_025096fb2312cc90016b010a58ce0087d0a904bdc907e97c76": {
+              "input_tokens": 631,
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "output_tokens": 0,
+              "content": [
+                {
+                  "input_tokens": 631,
+                  "cached_tokens": 0,
+                  "cache_write_tokens": 0,
+                  "output_tokens": 0
+                }
+              ]
+            },
+            "msg_025096fb2312cc90016b010a81afe087d0a30f7fc4d67b864f": {
+              "input_tokens": 0,
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "output_tokens": 385,
+              "content": [
+                {
+                  "input_tokens": 0,
+                  "cached_tokens": 0,
+                  "cache_write_tokens": 0,
+                  "output_tokens": 385
+                }
+              ]
+            },
+            "rs_025096fb2312cc90016b010a5c607487d08aa74fbd1169cd98": {
+              "input_tokens": 2,
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "output_tokens": 516
+            },
+            "rs_025096fb2312cc90016b010a5dc6a487d09b44a65af20a5afe": {
+              "input_tokens": 0,
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "output_tokens": 518
+            },
+            "rs_025096fb2312cc90016b010a5f713c87d096335328ccc51adb": {
+              "input_tokens": 0,
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "output_tokens": 518
+            },
+            "rs_025096fb2312cc90016b010a62602887d09985c7f3d62588fa": {
+              "input_tokens": 0,
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "output_tokens": 518
+            },
+            "rs_025096fb2312cc90016b010a6594a487d0b6dfd0e1fc64f92c": {
+              "input_tokens": 0,
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "output_tokens": 518
+            },
+            "rs_025096fb2312cc90016b010a68904c87d0b2b3637c329ec268": {
+              "input_tokens": 0,
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "output_tokens": 518
+            },
+            "rs_025096fb2312cc90016b010a6ace5887d09554274d6d8198cb": {
+              "input_tokens": 0,
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "output_tokens": 518
+            },
+            "rs_025096fb2312cc90016b010a6d6f9887d0a01df45d113f6499": {
+              "input_tokens": 0,
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "output_tokens": 518
+            },
+            "rs_025096fb2312cc90016b010a6fd2ac87d0b21d212f297ae5ae": {
+              "input_tokens": 0,
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "output_tokens": 518
+            },
+            "rs_025096fb2312cc90016b010a730a5887d08a9380f72c6e6d50": {
+              "input_tokens": 0,
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "output_tokens": 518
+            },
+            "rs_025096fb2312cc90016b010a7516f887d0857c7f853877cbba": {
+              "input_tokens": 0,
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "output_tokens": 518
+            },
+            "rs_025096fb2312cc90016b010a780db087d0a3020a1244b8cd82": {
+              "input_tokens": 0,
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "output_tokens": 518
+            },
+            "rs_025096fb2312cc90016b010a7ab08887d096e7df3657c7aadb": {
+              "input_tokens": 0,
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "output_tokens": 518
+            },
+            "rs_025096fb2312cc90016b010a7d431c87d0a644d380e7a0d86a": {
+              "input_tokens": 0,
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "output_tokens": 518
+            },
+            "rs_025096fb2312cc90016b010a80ab9887d0881c40a1420d4ac3": {
+              "input_tokens": 0,
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "output_tokens": 518
+            },
+            "rs_025096fb2312cc90016b010a81aff887d0a465fe0124235b0a": {
+              "input_tokens": 0,
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "output_tokens": 186
+            }
+          },
+          "request_fields": {
+            "instructions": {
+              "input_tokens": 1109,
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "output_tokens": 0
+            }
+          }
+        }
+      },
+      "committed": true,
+      "classroom_status": "needs_practice",
+      "decision_kind": "answer",
+      "action": "check_variant",
+      "question_after": "请改用键盘，亲自写一句英文：先写访客不能进入恒温室，再用 unless 从句说明持有有效通行证这一条件。"
+    },
+    {
+      "group": "acceptance",
+      "case": "r67",
+      "turn": 1,
+      "input_text": "{\"binding\": {\"lesson_id\": \"SYN-WORKSHOP\", \"lesson_point_id\": \"VP-LIMIT\", \"practice_id\": \"15ca21af-f9bf-488a-9d2f-0a420339a369\", \"task_sha256\": \"019d2c7c0c05973d15091a5b3aba14354f54a0e75c334522d2b719eb07bcd832\", \"rubric_version\": \"1\", \"attempt_id\": \"e412c9f248de423c9124762ec1e2bcc7\", \"question_id\": \"e4d5166862644cdba48041ad30b42934\", \"response_id\": \"fa3279b7-8c6c-4ef1-aabb-be2c1a89a5d5\", \"response_sha256\": \"1897cac0245861b0043442294174ff1bda462fed12b405cd6cce6dccb77424ac\", \"revision\": 2}, \"goal\": \"用 unless 说明进入恒温室的必要条件，保留有通行证才可以进入的原意。\", \"target_kind\": \"specified_form\", \"criteria\": {\"condition\": {\"required\": true, \"description\": \"明确表达没有有效通行证就不能进入恒温室，条件方向正确。\", \"evidence\": \"meaning\"}, \"structure\": {\"required\": true, \"description\": \"使用 unless 引导条件从句，主从句连接与否定相配。\", \"evidence\": \"written_form\"}}, \"question\": \"请用 unless 写一句话，告诉访客没有有效通行证就不能进入恒温室。\", \"question_purpose\": \"parent_output\", \"question_status\": \"sent\", \"classroom_status\": \"needs_practice\", \"answer\": \"Unless a visitor has a valid pass, that visitor cannot enter the climate-controlled room.\", \"medium\": \"ocr\", \"verification\": \"as_submitted\", \"production_origin\": \"human_initial\", \"prior\": [], \"previous_answers\": [], \"help_exposure\": [], \"next_point_known\": false, \"task_scope\": {\"qualified_variants\": [\"用符合本点条件的单句完成任务。\", \"调换信息顺序，同时保持原意并满足本点形式要求。\"], \"counterexamples\": [\"省略决定结论是否成立的限制，或颠倒关系。\"], \"genre_constraint\": \"原意、关系和读者理解优先，不按句长评分。\", \"hint_ladder\": [\"指出当前目标与位置\", \"提供局部方向\", \"按需给例子或建议\"], \"hint_policy\": {}, \"prerequisites\": []}, \"packet_sha256\": \"2cd505a5e1dfed99a352643e86ff508123f54ee983e3f1a5fa4592140942c825\"}",
+      "input_sha256": "b3d6f35d94115fdfd42dddbedf2df7105c65a3bbaf6dd79fb93634c9689d886c",
+      "instructions_sha256": "2962719f0ca1c89f0d6da8973e27228131f443b01ce5c71861997a096a6fe403",
+      "actual_output": "{\n  \"kind\": \"answer\",\n  \"response_result\": \"unknown\",\n  \"feedback\": \"从识别出的文字看，你把条件方向写对了：没有有效通行证，访客就不能进入恒温室。这里的 Unless 从句和主句中的 cannot enter 也搭配正确，只需核对原稿是否这样写。\",\n  \"criteria\": {\n    \"condition\": {\n      \"status\": \"met\",\n      \"reason\": \"句子说明没有有效通行证就不能进入，把持证表达为进入的必要条件，没有说有证就一定能进入。\",\n      \"quote\": \"Unless a visitor has a valid pass, that visitor cannot enter the climate-controlled room.\"\n    },\n    \"structure\": {\n      \"status\": \"unknown\",\n      \"reason\": \"识别文字中，Unless 引出持有有效通行证的条件，主句用 cannot enter 表达禁止进入。搭配本身正确，但识别结果尚未与原稿核对。\",\n      \"quote\": \"Unless a visitor has a valid pass, that visitor cannot enter\"\n    }\n  },\n  \"action\": \"clarify\",\n  \"reason\": \"条件方向已经清楚；核对原句即可判断指定书面形式，无需换题。\",\n  \"strategy\": \"verify_ocr\",\n  \"next\": {\n    \"criteria\": [\"structure\"],\n    \"question\": \"请对照原稿，把你写的这句英文连同标点原样打出来，不用修改。\",\n    \"expected\": \"取得与原稿核对过的文字，以判断本人原句中的 unless 条件从句是否与否定主句正确搭配。\"\n  }\n}",
+      "output_sha256": "ba741cd1853bba00a732466bef677ee31f95464d019db4644b6fa00480826aac",
+      "actual_model": "gpt-6.2-astra",
+      "effort": "max",
+      "requested_service_tier": "ultrafast",
+      "returned_service_tier": "default",
+      "seconds": 29.08,
+      "first_text_seconds": 26.97,
+      "usage": {
+        "input_tokens": 1744,
+        "input_tokens_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": 0,
+          "cache_write_tokens_details": {
+            "ttl_30m_tokens": 0,
+            "ttl_12h_tokens": 0
+          }
+        },
+        "output_tokens": 5348,
+        "output_tokens_details": {
+          "reasoning_tokens": 4985
+        },
+        "total_tokens": 7092,
+        "attribution": {
+          "items": {
+            "msg_050fca841e6999fd016b010a853fe487d0a369c669c83922bb": {
+              "input_tokens": 633,
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "output_tokens": 0,
+              "content": [
+                {
+                  "input_tokens": 633,
+                  "cached_tokens": 0,
+                  "cache_write_tokens": 0,
+                  "output_tokens": 0
+                }
+              ]
+            },
+            "msg_050fca841e6999fd016b010a9f078087d08b6e03d4b7e045a1": {
+              "input_tokens": 0,
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "output_tokens": 363,
+              "content": [
+                {
+                  "input_tokens": 0,
+                  "cached_tokens": 0,
+                  "cache_write_tokens": 0,
+                  "output_tokens": 363
+                }
+              ]
+            },
+            "rs_050fca841e6999fd016b010a87cf6887d0809368c68c58400c": {
+              "input_tokens": 2,
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "output_tokens": 516
+            },
+            "rs_050fca841e6999fd016b010a892c4087d0a30228fb41cc4c04": {
+              "input_tokens": 0,
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "output_tokens": 518
+            },
+            "rs_050fca841e6999fd016b010a8b33d487d0b81af719dafe2449": {
+              "input_tokens": 0,
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "output_tokens": 518
+            },
+            "rs_050fca841e6999fd016b010a8dc67487d0ac2519f2eced0c7c": {
+              "input_tokens": 0,
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "output_tokens": 518
+            },
+            "rs_050fca841e6999fd016b010a905dc087d0919db1b39e685fcf": {
+              "input_tokens": 0,
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "output_tokens": 518
+            },
+            "rs_050fca841e6999fd016b010a938c2087d099ef98416ce4c508": {
+              "input_tokens": 0,
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "output_tokens": 518
+            },
+            "rs_050fca841e6999fd016b010a961e3887d080fe57c94f86e033": {
+              "input_tokens": 0,
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "output_tokens": 518
+            },
+            "rs_050fca841e6999fd016b010a99a06887d09499e7bea54f794e": {
+              "input_tokens": 0,
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "output_tokens": 518
+            },
+            "rs_050fca841e6999fd016b010a9d0a9487d08a0ba8cfdfcb9e09": {
+              "input_tokens": 0,
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "output_tokens": 518
+            },
+            "rs_050fca841e6999fd016b010a9efbe087d0a2c634119115ccc6": {
+              "input_tokens": 0,
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "output_tokens": 325
+            }
+          },
+          "request_fields": {
+            "instructions": {
+              "input_tokens": 1109,
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "output_tokens": 0
+            }
+          }
+        }
+      },
+      "committed": true,
+      "classroom_status": "needs_practice",
+      "decision_kind": "answer",
+      "action": "clarify",
+      "question_after": "请对照原稿，把你写的这句英文连同标点原样打出来，不用修改。"
+    }
+  ],
+  "grading": "Release checks compare with the separate sealed expectations only after the tutor reply. No guardian model or second grader was invoked."
+}

@@ -1,0 +1,683 @@
+{
+  "task": "ENGLISH-VIDEO-POINT-TUTORING-V3-20261121",
+  "status": "passed",
+  "as_of": "2026-11-21T11:12:11+08:00",
+  "scope": "local implementation, installed teaching, real model on synthetic learners, native publication and public code review",
+  "baseline": {
+    "document_sha256": "9e324e49790a40d5669581e1db57647f93f1d82aab35b76e1cb1586e930b3c5c",
+    "instructions_sha256": "4a70c274b6efeb22b5f5e000f4b1436ae3763f3865682fe28a8fdf0de386dd37",
+    "english_review_v2": "7a510c0af84959f0d4c0be63260e604ac8a293c7",
+    "english_default": "4809ca08ce97a9ed4c3e2f5f4143973439188cdd",
+    "bridge_v2": "430aa5a3f42160e02c308b4105bd087a25982634",
+    "previous_snapshot": "a2b4727a865a787eed3eb16c4977df7c918c372e",
+    "actual_private_head": "9bbb7c1cf84fbe769cdaa5f38085068fe4b86414",
+    "actual_live_branch": "master",
+    "workspace": "preexisting uncommitted changes preserved; isolated private implementation branch",
+    "actual_gap": "V2 gated video-only relation on reading completion, replaced point-specific criteria with generic defaults, and projected only the broad skill’s latest episode."
+  },
+  "implementation": {
+    "private_commit": "9803059675e136e1843caed82327d236f0b1d84e",
+    "preimage_commit": "78e77d6adb3d120529a4ad0113f6fed4cca7deaa",
+    "private_branch": "codex/english-guided-points-v3",
+    "review_implementation_commit": "b4fbca9a65b74103e230c30fd8760fd9f91bc4cd",
+    "source_file_hashes": {
+      "scripts/english_writing.py": {
+        "before": "a8312ab6f93d2e572b74b6656c3925c8edb546b7419e6aa7e56c714882b9a744",
+        "after": "060c63e53efcb751ce6dc237a84565ed218402cd35190c641524405dfe0e543e"
+      },
+      "schema/english_pipeline/learning-event-v1.schema.json": {
+        "before": "9211c6e157b9524694be43c200ddddf1fe3ec08f8336afcf2e894360248c8d21",
+        "after": "327842874d2a7a300a8c085e5ccb02193724fa73b73b90e49bd01ef5280474f8"
+      },
+      "tests/english_pipeline/test_guided_course_points.py": {
+        "before": null,
+        "after": "6738382ae23a930d00b8651477d49e5c88526e0a87de5d3d9675bc56f0fc8957"
+      },
+      "english_pipeline/guided_points.py": {
+        "before": null,
+        "after": "f42559df22e574cd112a4cf88e0d6b31b7585f6e33840add922711e6a3db9764"
+      },
+      "english_pipeline/guided_point_cli.py": {
+        "before": null,
+        "after": "9eeb38635e1248ed5c2e1463d0f5ad169bd5cde42bb47c876b49fcceb9633a58"
+      },
+      "english_pipeline/lesson_point_memory.py": {
+        "before": null,
+        "after": "dfcaac3326d64a282ab0b29f853f8d58fc16cc427d9ce78eaf168b24c3396fab"
+      },
+      "english_pipeline/reading_writing_tasks.py": {
+        "before": "c33763b247efb322a4b7dfa167e75318058da37315949afde742bc5ed56ec800",
+        "after": "ddac3e9037f6b214de0cfe5d54ecef45def3b4ce749122b7e460bdd351650fcf"
+      },
+      "english_pipeline/writing_practice.py": {
+        "before": "44cca5f7bb8a44371d7dcb005e533f73af1aec136f259e43fcc9673f4a696f42",
+        "after": "da0c13171484901c9a60fc72e91e282c1fceeee10dbe344a79af450771d58136"
+      },
+      "english_pipeline/writing_practice_evidence.py": {
+        "before": "5106a5e6c0a3acb1941ddfb40cf0f1eddd53cf304bc226db857815fb2289618d",
+        "after": "f918b4b16bd5688541bc766e524899bab2d30da9ae7578dbc2aeafdbcf8be061"
+      },
+      "english_pipeline/writing_personal.py": {
+        "before": "43d91153298f4c427420f405f8d780c47cbbe06868dc82f344654c6da8503066",
+        "after": "72e625cc2ee83da1f2ee3ab5d01414b61a12f03445ac4967c4b988fb67759aca"
+      },
+      "english_pipeline/writing_workspace.py": {
+        "before": "596a4add5f885518c1628186e9b6639da6c58c00f63f91eb11efaa20bb68d2e5",
+        "after": "7a0ed4eb897a0436f0054b43a799a674e0c82ba34cb30dc793fca3b923a7f783"
+      },
+      "english_pipeline/writing_contract.py": {
+        "before": "23d3e0f6f7408be0d50f6558d785365bb35d02523b48ac01db2c90cf650e2550",
+        "after": "992552d13cf168c9c0122c0f345de9e93473009a49d7b4caafecec26d9ed00ae"
+      },
+      "english_pipeline/writing_publication.py": {
+        "before": "1d45a275660118433fc332824a53a6c7dfede6ce5de1b2f83033a9f21e8f4d8a",
+        "after": "ef2b812af376f0f9f7aa179e54ac62a602faa6757acd7306745380b30d0277c6"
+      },
+      "english_pipeline/publication.py": {
+        "before": "a8a66bf08b082e5cb609fcb4d0c5766e750989a474773adb8e3ab8b64b91d002",
+        "after": "c669ddafb38b1b377c46c198a56b155dfb6a3385c299276acef6481c5dd23cf7"
+      },
+      "english_pipeline/article_workspace.py": {
+        "before": "41026a737a51c40ea34c47c327acd177d7553b8fcbefe30dafba7e594fcd180b",
+        "after": "9c9cda5162d256c3a3e813e688d93adf1c0dd5df72b7d3ba62e3495ca7b93a1a"
+      },
+      "english_pipeline/article_service.py": {
+        "before": "e21069cb2fadfb6076df674e2ef0bf6c54021cff2874334b47ce7fcf8f9f9bff",
+        "after": "a1d3129957b9aafff6a2a924c231ac430330ee237bd8046642cabcc374fa5737"
+      },
+      "english_pipeline/article_web/writing.js": {
+        "before": "6b67cce89efb70d7ec9c310139e06dd4ce36ddd3e01688d775fe5efe759a2b76",
+        "after": "493c8db1c920c64e8ee26b947fe129ad8205c5b2c5363d06ac9704e8110f658f"
+      },
+      "codex-skill-sources/kaoyan-english-intensive-reading/SKILL.md": {
+        "before": "1a05094783e8b5031be762d31a55ec482be2a46a06aa7177c160aab0ff7ff414",
+        "after": "7e11f86333330f70886b47eeaa79bf671558cbf2ce620672d0e72118a6fcc272"
+      },
+      "codex-skill-sources/kaoyan-english-intensive-reading/references/guided-course-points.md": {
+        "before": null,
+        "after": "2962719f0ca1c89f0d6da8973e27228131f443b01ce5c71861997a096a6fe403"
+      },
+      "codex-skill-sources/kaoyan-english-intensive-reading/references/writing-workspace.md": {
+        "before": "6f204741a79661b392bd1bf8772b4570d694a6955d886591780eb948eb67fbcb",
+        "after": "20131f9ac032a9a1dab26d593776b1bd2da534c725239469c7999ccda9d508ed"
+      },
+      "codex-skill-sources/kaoyan-english-intensive-reading/scripts/english_skill.py": {
+        "before": "d0cd62f625237528ec0916cbe7878c4c6c646c77a5c0272918f40c2deb498e36",
+        "after": "8dc6c33c91560fe9736104f72f1ffebfe7bf179eaf2f191c9a9821a139ce207c"
+      }
+    },
+    "source_scope": "English native course, skills, schema, query and publisher; public general tutor instructions included"
+  },
+  "installation": {
+    "status": "passed",
+    "skill": "kaoyan-english-intensive-reading",
+    "source_and_installed_hashes": {
+      "SKILL.md": {
+        "before": "1a05094783e8b5031be762d31a55ec482be2a46a06aa7177c160aab0ff7ff414",
+        "installed": "7e11f86333330f70886b47eeaa79bf671558cbf2ce620672d0e72118a6fcc272",
+        "source": "7e11f86333330f70886b47eeaa79bf671558cbf2ce620672d0e72118a6fcc272"
+      },
+      "references/guided-course-points.md": {
+        "before": null,
+        "installed": "2962719f0ca1c89f0d6da8973e27228131f443b01ce5c71861997a096a6fe403",
+        "source": "2962719f0ca1c89f0d6da8973e27228131f443b01ce5c71861997a096a6fe403"
+      },
+      "references/writing-workspace.md": {
+        "before": "6f204741a79661b392bd1bf8772b4570d694a6955d886591780eb948eb67fbcb",
+        "installed": "20131f9ac032a9a1dab26d593776b1bd2da534c725239469c7999ccda9d508ed",
+        "source": "20131f9ac032a9a1dab26d593776b1bd2da534c725239469c7999ccda9d508ed"
+      },
+      "scripts/english_skill.py": {
+        "before": "d0cd62f625237528ec0916cbe7878c4c6c646c77a5c0272918f40c2deb498e36",
+        "installed": "8dc6c33c91560fe9736104f72f1ffebfe7bf179eaf2f191c9a9821a139ce207c",
+        "source": "8dc6c33c91560fe9736104f72f1ffebfe7bf179eaf2f191c9a9821a139ce207c"
+      }
+    },
+    "native_loaded_sha256": {
+      "english_pipeline/guided_points.py": "f42559df22e574cd112a4cf88e0d6b31b7585f6e33840add922711e6a3db9764",
+      "english_pipeline/writing_practice.py": "da0c13171484901c9a60fc72e91e282c1fceeee10dbe344a79af450771d58136",
+      "english_pipeline/guided_point_cli.py": "9eeb38635e1248ed5c2e1463d0f5ad169bd5cde42bb47c876b49fcceb9633a58",
+      "english_pipeline/writing_publication.py": "ef2b812af376f0f9f7aa179e54ac62a602faa6757acd7306745380b30d0277c6",
+      "installed-skill/SKILL.md": "7e11f86333330f70886b47eeaa79bf671558cbf2ce620672d0e72118a6fcc272",
+      "installed-skill/scripts/english_skill.py": "8dc6c33c91560fe9736104f72f1ffebfe7bf179eaf2f191c9a9821a139ce207c",
+      "installed-skill/references/guided-course-points.md": "2962719f0ca1c89f0d6da8973e27228131f443b01ce5c71861997a096a6fe403"
+    },
+    "worker": {
+      "release": "english-article/1.9.0",
+      "loaded_function_and_source_hashes": {
+        "course_decision": {
+          "source_sha256": "f42559df22e574cd112a4cf88e0d6b31b7585f6e33840add922711e6a3db9764",
+          "loaded_code_sha256": "ab97ebe0697938d28be01b5f6d3e2756068f0b73283e27c01252e3f0f2bb31c9"
+        },
+        "reader_operation": {
+          "source_sha256": "da0c13171484901c9a60fc72e91e282c1fceeee10dbe344a79af450771d58136",
+          "loaded_code_sha256": "5a346f92e7546c83e9632036ab833f2426f5878f85488956bb90654415749855"
+        },
+        "http": {
+          "source_sha256": "a1d3129957b9aafff6a2a924c231ac430330ee237bd8046642cabcc374fa5737",
+          "loaded_code_sha256": "0ee5f812b9e92095942c0bedd7715608820ede64783095d4cd82fdd607e43c8e"
+        }
+      },
+      "js_served_sha256": "493c8db1c920c64e8ee26b947fe129ad8205c5b2c5363d06ac9704e8110f658f",
+      "checked_at": "2026-11-21T11:05:05.858792+08:00"
+    },
+    "readback_time": "2026-11-21T11:12:11+08:00",
+    "normal_entry": "english_skill.py run english_writing.py point; existing start-today / resume route",
+    "native_phase": "current course tutor in same foreground turn",
+    "shared_bridge": "not_changed",
+    "local_stdio_MCP": {
+      "status": "passed",
+      "change": "not_changed",
+      "server_release": "0.4.1+sha256.c6a6244bf56f65f7ed26004986d6e3b1a68b9f104f44e5a7288b5ed38ba07579",
+      "authority_fingerprint": "3f3179d6a22f7f3d68956abd437b04c2bcbc4b7bab917cb525f9ab2285e37dd0",
+      "teaching_entry": "installed English wrapper and native course CLI"
+    }
+  },
+  "teaching": {
+    "contract": "english-lesson-point/1",
+    "modes": {
+      "reading_micro": "training, existing reading completion and one reading offer",
+      "guided_course_point": "training, verified course source or attributed report; evidence-driven",
+      "open_assessment": "open, existing answer isolation"
+    },
+    "identity": [
+      "lesson_id",
+      "lesson_point_id",
+      "point_version",
+      "task_sha256",
+      "rubric_version",
+      "practice_id",
+      "attempt_id",
+      "question_id",
+      "response_id",
+      "response_sha256"
+    ],
+    "decision": [
+      "per-criterion met/not_met/unknown, reason and exact versioned quote",
+      "one action and reason",
+      "next.criteria, next.source_response, next.expected, sent/planned"
+    ],
+    "statuses": [
+      "needs_practice",
+      "ready_for_next",
+      "paused",
+      "skipped_by_user"
+    ],
+    "limits": "No fixed number of questions, time limit or reading-offer quota gates a video point.",
+    "mastery": "classroom readiness only; no automatic long-term mastery or open transfer",
+    "controls_verified": {
+      "control_and_drafts_same_practice": true,
+      "actions": [
+        "explain",
+        "check_variant",
+        "advance"
+      ],
+      "target_results": [
+        "not_applicable",
+        "met",
+        "met"
+      ],
+      "origins": [
+        "unknown",
+        "ai_or_mixed",
+        "human_revision"
+      ],
+      "statuses": [
+        "needs_practice",
+        "needs_practice",
+        "ready_for_next"
+      ],
+      "source": "actual synthetic model replay and native immutable capture",
+      "fixture_formal_apply_invocations": 0
+    },
+    "lookup": "Filter confirmed episode metadata by exact point ID before the response budget; report matches, included, omitted and source accessibility."
+  },
+  "acceptance": [
+    {
+      "id": "G01",
+      "status": "passed",
+      "evidence_type": "contract",
+      "observed": "显式 criteria、反例、体裁约束和提示梯度保留，各版按 SHA 冻结。旧 V2 任务仍能读，同一课点修改标准被拒绝。",
+      "locator": "test_custom_rubric_legacy_and_task_freeze"
+    },
+    {
+      "id": "G02",
+      "status": "passed",
+      "evidence_type": "actual_tutor",
+      "observed": "the drawback 与 though 两种自然表达均获接受。两条反馈分别引用了该答句保留的事实和关系。",
+      "locator": "acceptance/r12:01, r16:01"
+    },
+    {
+      "id": "G03",
+      "status": "passed",
+      "evidence_type": "actual_tutor",
+      "observed": "Only visitors who hold a pass 传达了必要条件。教练确认意思，要求只补本点指定的 unless；纯功能题允许其他表达。",
+      "locator": "acceptance/r21:01, r12:01, r16:01"
+    },
+    {
+      "id": "G04",
+      "status": "passed",
+      "evidence_type": "actual_tutor",
+      "observed": "首答给出正确条件和书面结构，当轮说明依据并明确过关，next=null。",
+      "locator": "acceptance/r04:01"
+    },
+    {
+      "id": "G05",
+      "status": "passed",
+      "evidence_type": "actual_tutor",
+      "observed": "多余 so 的下一步是只修连接；because 造成意义倒置时，反馈解释了两项事实的逻辑关系。",
+      "locator": "acceptance/r29:01–02, r31:01"
+    },
+    {
+      "id": "G06",
+      "status": "passed",
+      "evidence_type": "actual_tutor",
+      "observed": "第二次仍写成因果时改用配对判断；判断正确后返回英文产出，再依据新句放行。每个追问均绑定触发它的上一答。",
+      "locator": "acceptance/r31:01–04"
+    },
+    {
+      "id": "G07",
+      "status": "passed",
+      "evidence_type": "actual_tutor_and_capture",
+      "observed": "完整范句照写在原件链标为辅助成功、课堂仍待练；换成未示范的骑行条件后独立组织新句可过关。局部自主修正可以直接过关。",
+      "locator": "replay-final/q97:01–03, acceptance/r29:02; verified-control-chain"
+    },
+    {
+      "id": "G08",
+      "status": "passed",
+      "evidence_type": "actual_tutor",
+      "observed": "含混的 it/that 没有被强行判成知识错误；解释、暂停与跳过独立保存，控制事件不生成作答判定。",
+      "locator": "acceptance/r43,r47,r53; earlier replay-final/p83"
+    },
+    {
+      "id": "G09",
+      "status": "passed",
+      "evidence_type": "contract_and_actual_tutor",
+      "observed": "视频文件 SHA 或真实转述均可启动 relation。长课留在原点；时间、听完、确认、跳过、次数均不能生成过关证据。",
+      "locator": "native point contracts; reported-video replays; replay-final/f37,m73"
+    },
+    {
+      "id": "G10",
+      "status": "passed",
+      "evidence_type": "normal_native_entry",
+      "observed": "已知下一点由冻结 lesson 中的顺序定位，另建待练的本次练习；未知则让学生继续视频。相同 next 请求只推进一次。",
+      "locator": "test_actual_delivery_stale_receipt_and_fresh_attempt; normal-route-and-answer-scope"
+    },
+    {
+      "id": "G11",
+      "status": "passed",
+      "evidence_type": "contract_and_normal_native_entry",
+      "observed": "未送达、错误问题 ID、过期决策包或旧 attempt 均被拒；重复同一决定幂等。输入、当前问题与 rubric 均绑定版本/哈希。",
+      "locator": "test_actual_delivery_stale_receipt_and_fresh_attempt; installed point turn/apply"
+    },
+    {
+      "id": "G12",
+      "status": "passed",
+      "evidence_type": "native_processes_and_actual_tutor",
+      "observed": "新进程及显式跨聊天接续相同点和下一题；书签独立。暂停和续学没有多计一次作答，新点不继承过关。",
+      "locator": "test_resume_same_point_skip_controls_and_flag; normal-route-and-answer-scope; replay-final/f37:04–06"
+    },
+    {
+      "id": "G13",
+      "status": "passed",
+      "evidence_type": "actual_tutor_contract_and_DOM",
+      "observed": "语音与未核 OCR 均未获得书面证据放行。原稿、版本和范例曝光保留。未授权、仅给 verdict、撤销授权及开放评估隔离均独立检查。",
+      "locator": "acceptance/r61,r67; V2 writing tests; normal-route-and-answer-scope; reader submit/reopen"
+    },
+    {
+      "id": "G14",
+      "status": "passed",
+      "evidence_type": "isolated_native_writer_and_MCP",
+      "observed": "两条真实模型回放形成的合成作答经过原 writer，重复收尾时账本哈希相同；两个同大类 point 可分别查询，低预算明确省略。",
+      "locator": "formal-test: 2444218bc24bbfb438ce3436b6e9b09ef30cbc11"
+    },
+    {
+      "id": "G15",
+      "status": "passed",
+      "evidence_type": "production_MCP_and_isolated_snapshot",
+      "observed": "重新发现英语快照并固定版本。安全点分片读至 EOF 并验哈希，正式与个人摘要各自 current。固定正式账本的隔离失效测试改变了个人身份和可见覆盖。",
+      "locator": "live-mcp-final; verify-current; same_formal_ledger_summary_change"
+    },
+    {
+      "id": "G16",
+      "status": "passed",
+      "evidence_type": "installed_wrapper_and_actual_model",
+      "observed": "通过实装 wrapper 取本点问题及未标注回答，一次无工具模型推理同时生成诊断和动作，实际结果再由原入口验证提交。最终合同逐条检查真实输出，未向模型传评审预期。",
+      "locator": "examples/guided-points-v3-replay.json"
+    }
+  ],
+  "model_replay": {
+    "total_requests": 58,
+    "groups": {
+      "replay": 12,
+      "replay-final": 30,
+      "acceptance": 15,
+      "v2-comparison-call": 1
+    },
+    "transport_statuses": {
+      "completed": 58
+    },
+    "final_contract_turns": 18,
+    "final_contract_scenarios": 12,
+    "final_contract_applied": 18,
+    "final_contract_model": [
+      "gpt-6.2-astra"
+    ],
+    "final_instructions_sha256": "2962719f0ca1c89f0d6da8973e27228131f443b01ce5c71861997a096a6fe403",
+    "final_median_seconds": 10.253499999999999,
+    "final_range_seconds": [
+      3.077,
+      44.18
+    ],
+    "grader_model_calls": 0,
+    "real_learner_turns": 0,
+    "cost_basis": "existing ChatGPT subscription; no additional paid service or per-request currency receipt",
+    "expected_excluded": true,
+    "fixture_expected_sha256": "1a3a068a7971c31867c88512662f9f2e3c399399f7f592178fd1821fac8f1f58",
+    "provider": "openai",
+    "auth": "existing ChatGPT account",
+    "reasoning_effort": "max",
+    "requested_service_tier": "ultrafast",
+    "returned_service_tier": "default",
+    "effective_ultrafast_status": "pending",
+    "latency_scope": "model round-trip for synthetic inputs, one call per assessed learner message; not human end-to-end latency",
+    "paired_v2_v3_seconds": [
+      13.732,
+      6.163
+    ],
+    "paired_v2_v3_first_text_seconds": [
+      13.376,
+      4.641
+    ],
+    "paired_n": 1,
+    "actual_final_outputs": "examples/guided-points-v3-replay.json",
+    "review_method": "Primary implementer read the actual outputs against the separate expectations and inspected the attached evidence and native state; no second model.",
+    "release_observations": {
+      "premature_pass_observed": 0,
+      "unnecessary_compulsory_question_after_complete_answer_observed": 0,
+      "unbound_next_question_observed": 0,
+      "scope": "final-contract sample only"
+    },
+    "synthetic_learners": true,
+    "mock_tutor_used_for_behavior": false
+  },
+  "native_data": {
+    "formal_writer": "existing native typed actions, formal lock, native receipt and derivative recovery",
+    "capture": "same native session/point workspace; confirmed via after-class receive",
+    "production_formal_apply_invocations": 0,
+    "production_learner_evidence_writes": 0,
+    "formal_sequence_before": 1100,
+    "formal_sequence_after": 1100,
+    "formal_ledger_sha256": "5581642b4e6a439d2559d5fae87ea684e7b501c66e1f53c5cf8cb5b5f0c123a7",
+    "original_writer_receipt": "EN-RECEIPT-61BFBAB59110F502",
+    "formal_receipt_reused": true,
+    "formal_source_version": "d4492a561d4e651aabf691386e41fe00106419196cb779f77242ea91c7ff955d",
+    "memory_generation": "e2ea2362eb019f9ded3d634cadb4f3baf57d2cbdfce84792970f55194d6b0d42",
+    "personal_index_sha256": "18c16f861aea038ba3c58707383473c7911c402e48a7231cf838bb2def97bd50",
+    "synthetic_confirmed": {
+      "scope": "synthetic_only",
+      "after_each_formal": [
+        {
+          "after": 1,
+          "summary_version": "212ec21934726e9808d44aa2ab3b01e42d5c7a76add0eee90673d394c854ee17",
+          "point_count": 1,
+          "projection_sha256": "a416416d1313a607fc7169d46132a0bace48b2748413df2c64258e2f9136773b",
+          "writer_ids": [
+            "EN-RECEIPT-CA587CE51A89E8B6.json"
+          ]
+        },
+        {
+          "after": 2,
+          "summary_version": "513007ea4c5702f005129152b2925e2b2420e1e1876450362594e90406034adf",
+          "point_count": 2,
+          "projection_sha256": "4d2a6fb3d114396a6201a826e26ce7a924eb89acc9fdb418dc8634ef85261d5d",
+          "writer_ids": [
+            "EN-RECEIPT-CA587CE51A89E8B6.json",
+            "EN-RECEIPT-F0AD4EACA0B315B5.json"
+          ]
+        }
+      ],
+      "exact_query": {
+        "VP-LIMIT": {
+          "point": "VP-LIMIT",
+          "broad_skill": "writing_skill:language_control",
+          "status": "ready_for_next",
+          "exact_source": "7a0e3c2fd737349f0b9578fab4d12a5307b040799f0b1c827497409100fa5ef2",
+          "low_budget_included": 0,
+          "low_budget_omitted": 1,
+          "original": [
+            "available_not_reopened"
+          ]
+        },
+        "VP-CONTRAST": {
+          "point": "VP-CONTRAST",
+          "broad_skill": "writing_skill:language_control",
+          "status": "ready_for_next",
+          "exact_source": "c6b77a2c9461f7201f414dd64524314a5eb749a57dbca2ead0fb965f8b5c8e42",
+          "low_budget_included": 0,
+          "low_budget_omitted": 1,
+          "original": [
+            "verified_archived_original"
+          ]
+        }
+      },
+      "same_formal_ledger_summary_change": {
+        "unchanged_formal": true,
+        "changed_personal_version": true,
+        "confirmed_after_invalidation": 1
+      },
+      "snapshot": {
+        "source_commit": "2444218bc24bbfb438ce3436b6e9b09ef30cbc11",
+        "eof": true,
+        "sha256": "4d2a6fb3d114396a6201a826e26ce7a924eb89acc9fdb418dc8634ef85261d5d"
+      },
+      "formal_events": 2
+    },
+    "fixed_v2_cohort": {
+      "n": 4,
+      "originals": 4,
+      "exact": 4,
+      "natural_recall": 4,
+      "k": 5,
+      "budget": 6144,
+      "cohort_sha256": "f08e232ff883d30db44095270d78794b57b1f89b1fb2338219a0f221595eb665"
+    }
+  },
+  "mcp": {
+    "subject": "english",
+    "local_readback": "passed",
+    "source_commit": "138a4b8c7f5b5cadaddf425b35a98911c16ea754",
+    "local_version": "d7132e8201a3de35b8645aa6efcd4601aa40cb519c5748925df883e43c5cd363",
+    "source_role": "local_immutable_study_snapshot",
+    "publication_target": "local",
+    "coverage_status": "COMPLETE",
+    "domains": {
+      "vocabulary": {
+        "records": 2612,
+        "null_ids": 0
+      },
+      "sentence_patterns": {
+        "records": 110,
+        "null_ids": 0
+      },
+      "articles": {
+        "records": 61,
+        "null_ids": 0
+      },
+      "intake_events": {
+        "records": 9,
+        "null_ids": 0
+      },
+      "other_history_files": {
+        "records": 1358,
+        "null_ids": 1358
+      }
+    },
+    "file_counts": {
+      "files": 16713,
+      "bytes": 2024052764,
+      "current_files": 10274,
+      "retained_files": 6439,
+      "lfs_files": 1
+    },
+    "formal_freshness": "current",
+    "personal_summary_freshness": "current",
+    "freshness": {
+      "status": "current",
+      "reason": "versions_match",
+      "published_formal_version": "d4492a561d4e651aabf691386e41fe00106419196cb779f77242ea91c7ff955d",
+      "current_formal_version": "d4492a561d4e651aabf691386e41fe00106419196cb779f77242ea91c7ff955d",
+      "published_personalization_version": "1bd5eec04ead169a4f24f6b250a834bb532531b73d7d2713a6430228529725ce",
+      "current_personalization_version": "1bd5eec04ead169a4f24f6b250a834bb532531b73d7d2713a6430228529725ce",
+      "native_status": "ready",
+      "scope": "committed formal and personal context; pending quick packages are not formal history",
+      "formal_freshness": "current",
+      "personal_summary_freshness": "current",
+      "projection_sha256": "025409fad32130ec0435dc1d55f2d5e99f9b96cbb8198af315f6e46dd1494b82",
+      "memory_generation": "e2ea2362eb019f9ded3d634cadb4f3baf57d2cbdfce84792970f55194d6b0d42",
+      "snapshot_id": "138a4b8c7f5b5cadaddf425b35a98911c16ea754",
+      "pending_publications": []
+    },
+    "personalization": {
+      "schema": "english-teaching-publication/3.1",
+      "source_summary_version": "18c16f861aea038ba3c58707383473c7911c402e48a7231cf838bb2def97bd50",
+      "memory_generation": "e2ea2362eb019f9ded3d634cadb4f3baf57d2cbdfce84792970f55194d6b0d42",
+      "lifecycle_sha256": "576ad6efb7a2c9e7e683c7d0d954dc4b1ab005c08b4d2b624422908365f99323",
+      "status": "available",
+      "version": "1bd5eec04ead169a4f24f6b250a834bb532531b73d7d2713a6430228529725ce",
+      "entrypoint": "context/personal-summary/current.json",
+      "projection_sha256": "025409fad32130ec0435dc1d55f2d5e99f9b96cbb8198af315f6e46dd1494b82",
+      "coverage": {
+        "generation": "e2ea2362eb019f9ded3d634cadb4f3baf57d2cbdfce84792970f55194d6b0d42",
+        "included_points": 2068,
+        "state": "available",
+        "total_local_points": 2879,
+        "confirmed_lesson_points": 0,
+        "excluded_points": 811,
+        "excluded": [
+          "protected",
+          "pending_or_invalidated",
+          "older_episodes",
+          "raw_evidence",
+          "quick_only"
+        ]
+      }
+    },
+    "index_path": "context/personal-summary/current.json",
+    "index_sha256": "025409fad32130ec0435dc1d55f2d5e99f9b96cbb8198af315f6e46dd1494b82",
+    "index_eof": true,
+    "member_count": 18,
+    "point_path": "context/personal-summary/lesson-points.json",
+    "point_sha256": "8f05e33b4b0a4f25f6ab2e2262f21bd8520cbb940ddf444798b395d56196ba3a",
+    "point_eof": true,
+    "hashes_match": true,
+    "point_document": {
+      "confirmed_point_count": 0,
+      "eligible_observation_count": 0,
+      "excluded": [
+        "unconfirmed_workspace",
+        "protected",
+        "invalid_or_pending",
+        "raw_answers",
+        "legacy_without_point_id"
+      ],
+      "older_observations_omitted": 0,
+      "records": [],
+      "schema": "english-course-point-projection/1",
+      "scope": "latest safe confirmed classroom observation per lesson and point"
+    },
+    "protected_probe": "PROTECTED_PUBLISHED_SOURCE",
+    "protected_write_count": 0,
+    "before_attempt": "before_attempt",
+    "publication_event": "EN-RECEIPT-61BFBAB59110F502:closeout:7eb751d31ef3f0418b98cbd9:memory:f7c1dddd8d9ec65e4c8ccfd0:teaching:1bd5eec04ead169a4f24f6b2",
+    "provider_change": "not_changed",
+    "shared_schema_change": "not_changed",
+    "intermediate_local_version": {
+      "status": "PUBLISHED",
+      "source_commit": "de849e08175031bd44922c6c405abdd4fa8c5574",
+      "local_version": "dd45ea676862d9607924313808f3159cc84800e3a864dd2fe570bebcda8ef793",
+      "event_id": "EN-RECEIPT-61BFBAB59110F502:closeout:7eb751d31ef3f0418b98cbd9:memory:f7c1dddd8d9ec65e4c8ccfd0:teaching:c6e3dd067ef8948f8ae53ae2"
+    },
+    "projection_versioning": "New projection recipe is part of the live summary identity. The original formal event, source index and confirmed learner generation remained fixed in production."
+  },
+  "github": {
+    "repository": "xialovezhu-wq/kaoyan-english-system",
+    "review_ref": "refs/heads/review/20261121-english-guided-points-v3",
+    "implementation_sha": "b4fbca9a65b74103e230c30fd8760fd9f91bc4cd",
+    "pinned_source_readback_status": "passed",
+    "receipt_path": "schema/acceptance/20261121-english-guided-points-v3.json",
+    "receipt_commit_semantics": "Containing commit; final ref and SHA are read back after push in the local terminal receipt.",
+    "final_ref_status": "pending",
+    "public_replay": "examples/guided-points-v3-replay.json",
+    "main_merge": false,
+    "permission_change": false,
+    "force_push": false
+  },
+  "experience": {
+    "real_learner_trial": "pending",
+    "real_v3_learning_turns": 0,
+    "real_user_feedback_latency": "pending",
+    "longitudinal_effect": "pending",
+    "portrait_physical_placement": "pending",
+    "reason": "An existing different writing session owns the portrait screen. It retained the lease.",
+    "tested_UI_scope": "real English HTTP and page JavaScript in isolated DOM, question delivery, pause, resume, submit, judge and reopen",
+    "physical_takeovers": 0
+  },
+  "rollback": {
+    "persistent_off": "english_writing.py point feature --set off",
+    "persistent_on": "english_writing.py point feature --set on",
+    "process_override": "KAOYAN_ENGLISH_GUIDED_POINTS=off",
+    "verified": {
+      "v2_normal_entry_works_with_v3_off": true,
+      "reenabled": true,
+      "isolated_data_root": true,
+      "production_flag_changed": false
+    },
+    "scope": "Only new guided teaching is disabled. Read original versions, V3 history and V2 tasks through their owning entrypoints. Do not roll back learner data.",
+    "code": "Use verified V2 preimages for the touched files, reinstall those Skill files and reload the native English reader. Use a new public revert commit."
+  },
+  "checks": {
+    "native_tests": "24 passed",
+    "public_source_tests": "13 passed",
+    "route_and_permissions": {
+      "native_start_today_and_resume": true,
+      "exact_question_and_revocation": true,
+      "verdict_alone_withholds_guided_grading": true,
+      "unknown_next": "next_point_unknown",
+      "persistent_flag_reversible": true,
+      "original_point_preserved": true,
+      "isolated": true
+    },
+    "runtime_ui_tests": [
+      {
+        "stage": "submit",
+        "errors": [],
+        "rendered_revision": "5",
+        "dom_engine": "jsdom",
+        "physical_viewport": false
+      },
+      {
+        "stage": "reopen",
+        "errors": [],
+        "rendered_revision": "6",
+        "dom_engine": "jsdom",
+        "physical_viewport": false
+      }
+    ],
+    "installed_contract_check": "passed",
+    "graph": {
+      "edge_count": 16149,
+      "formal_zero_write_guard": "PASS",
+      "node_count": 11013,
+      "status": "PASS",
+      "syllabus_verified_count": 94
+    }
+  },
+  "resolved_during_verification": [
+    "Isolated fast Capture staging initially used the cold volume and was refused; the normal local test root was then used.",
+    "Canonicalized the immutable capture root before comparing attachment paths on macOS.",
+    "A development sample retained too much of an exposed example when changing audience. Refined the generic help policy and verified a content-changed case with an unseen helmet condition.",
+    "Used the same frozen practice identity for a control and its submitted answers; verified the help, assisted reproduction and later original response in one captured practice."
+  ],
+  "independent_web_revalidation": "pending"
+}
